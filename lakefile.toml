@@ -1,0 +1,11 @@
+name = "cas"
+version = "0.1.0"
+defaultTargets = ["cas"]
+
+[[lean_lib]]
+name = "Cas"
+
+[[lean_exe]]
+name = "cas"
+root = "Main"
+supportInterpreter = true
