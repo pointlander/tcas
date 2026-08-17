@@ -33,8 +33,9 @@ def star (x : String) : Tree → Tree
       match a with
       | .ref y =>
         if x == y then
-          if Tree.occurs x f then d I ⬝ star x f
-          else f
+          -- Website S: `λx. f x` is `△ (△ [x]f) I`, not Jay's flipped `△ (△ I) [x]f`.
+          -- η is omitted: `λx. △ x` is a stem constructor, not the identity of `△`.
+          d (star x f) ⬝ I
         else
           d (star x f) ⬝ (K ⬝ .ref y)
       | _ =>
@@ -44,10 +45,12 @@ notation:max "λ*" x:max ", " b:arg => star x b
 
 /-- A tiny lambda language that compiles to trees. -/
 inductive Tm where
-  | v    : String → Tm
-  | node : Tm
-  | app  : Tm → Tm → Tm
-  | lam  : String → Tm → Tm
+  | v     : String → Tm
+  | node  : Tm
+  | app   : Tm → Tm → Tm
+  | lam   : String → Tm → Tm
+  /-- Splice a closed combination into a term. -/
+  | embed : Tree → Tm
   deriving Repr, Inhabited
 
 namespace Tm
@@ -59,10 +62,11 @@ def lamn : List String → Tm → Tm
   | x :: xs, b => .lam x (lamn xs b)
 
 def compile : Tm → Tree
-  | .v x     => .ref x
-  | .node    => Tree.node
-  | .app f a => compile f ⬝ compile a
-  | .lam x b => star x (compile b)
+  | .v x      => .ref x
+  | .node     => Tree.node
+  | .app f a  => compile f ⬝ compile a
+  | .lam x b  => star x (compile b)
+  | .embed t  => t
 
 /-- `triage l s f x` as a surface term. -/
 def triage (l s f x : Tm) : Tm :=

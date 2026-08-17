@@ -6,4 +6,5 @@ import Cas.Expr
 import Cas.Algebra
 import Cas.Diff
 import Cas.Parse
+import Cas.Program
 import Cas.Kernel

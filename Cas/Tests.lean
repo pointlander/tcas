@@ -96,4 +96,46 @@ private def roundTrip (e : Expr) : Bool :=
         | some t => (eval! t).toTree == I
         | none => false)
 
+/-! ### Compiled eval / diff programs (construction only; reduction is runtime) -/
+
+#guard (eval! (Tm.compile (Tm.lam "x" (Tm.embed I ◃ Tm.v "x")) ⬝ △)).toTree == △
+#guard teval.size > 0
+#guard tdiff.size > 0
+
+/-- Runtime checks for `teval` / `tdiff`. Returns `none` on success. -/
+def programSelfTest : Option String :=
+  let ev (s : String) (n : Nat) : Option Nat :=
+    match parseExpr? s with
+    | some e => kernelEvalExpr n e
+    | none   => none
+  let kd (s : String) : Option String :=
+    match parseExpr? s with
+    | some e =>
+        match kernelDiffExpr e with
+        | some d => some (Expr.simplify d).toString
+        | none   => some "<diverged>"
+    | none => some "<parse>"
+  let expect (name : String) (got want : Option String) : Option String :=
+    if got == want then none else some s!"{name}: got {got}, want {want}"
+  let rec firstFail : List (Option String) → Option String
+    | [] => none
+    | none :: rest => firstFail rest
+    | some m :: _ => some m
+  firstFail
+    [ if ev "2" 0 == some 2 then none else some "teval 2"
+    , if ev "x" 5 == some 5 then none else some "teval x @ 5"
+    , if ev "x+1" 4 == some 5 then none else some "teval x+1 @ 4"
+    , if ev "2*x+1" 3 == some 7 then none else some "teval 2*x+1 @ 3"
+    , if ev "x^2+1" 3 == some 10 then none else some "teval x^2+1 @ 3"
+    , expect "tdiff 2" (kd "2") (some "0")
+    , expect "tdiff x" (kd "x") (some "1")
+    , expect "tdiff x+1" (kd "x+1") (some "1")
+    , expect "tdiff x^2" (kd "x^2") (some "2 * x")
+    , expect "tdiff sin(x)" (kd "sin(x)") (some "cos(x)")
+    , expect "tdiff cos(x)" (kd "cos(x)") (some "-sin(x)")
+    , expect "tdiff exp(x)" (kd "exp(x)") (some "exp(x)")
+    , expect "tdiff ln(x)" (kd "ln(x)") (some "1 / x")
+    , if ev "(x+1)*(x+2)" 3 == some 20 then none else some "teval (x+1)*(x+2) @ 3"
+    ]
+
 end Cas.Tests

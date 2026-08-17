@@ -12,6 +12,7 @@ import Cas.Expr
 import Cas.Algebra
 import Cas.Diff
 import Cas.Bracket
+import Cas.Program
 
 namespace Cas
 
@@ -73,14 +74,8 @@ def pairPayload? : Value → Option (Value × Value)
   | .fork a b => some (a, b)
   | _         => none
 
-/--
-  Evaluate an encoded *natural-number* polynomial at a natural `x`.
-  Constants must be non-negative; `sin`/`ln`/… are rejected.
-
-  Addition, multiplication and exponentiation run as tree-calculus
-  programs (`tplus`, `ttimes`, `tpow`).
--/
-partial def kernelEval (x : Value) (e : Value) : Option Value :=
+/-- Lean-side intensional walker; the specification of `teval`. -/
+partial def walkEval (x : Value) (e : Value) : Option Value :=
   match e with
   | .fork tag payload =>
       match tag.toNat? with
@@ -93,27 +88,27 @@ partial def kernelEval (x : Value) (e : Value) : Option Value :=
       | some 2 =>
           match payload with
           | .fork a b =>
-              match kernelEval x a, kernelEval x b with
+              match walkEval x a, walkEval x b with
               | some va, some vb => kernelAdd va vb
               | _, _ => none
           | _ => none
       | some 3 =>
           match payload with
           | .fork a b =>
-              match kernelEval x a, kernelEval x b with
+              match walkEval x a, walkEval x b with
               | some va, some vb => kernelMul va vb
               | _, _ => none
           | _ => none
       | some 4 =>
           match payload with
           | .fork a b =>
-              match kernelEval x a, kernelEval x b with
+              match walkEval x a, walkEval x b with
               | some va, some vb => kernelPow va vb
               | _, _ => none
           | _ => none
       | some 5 =>
           -- neg: only `-0`
-          match kernelEval x payload with
+          match walkEval x payload with
           | some v =>
               match v.toNat? with
               | some 0 => some (.leaf)
@@ -122,18 +117,17 @@ partial def kernelEval (x : Value) (e : Value) : Option Value :=
       | _ => none
   | _ => none
 
+/-- Reduce `teval ⬝ e ⬝ x`. -/
+def kernelEval (x e : Value) (fuel : Nat := Value.defaultFuel) : Option Value :=
+  run2 teval e x fuel
+
 def kernelEvalExpr (x : Nat) (e : Expr) : Option Nat :=
   match kernelEval (Value.ofNat x) (Expr.encode e) with
   | some v => v.toNat?
   | none   => none
 
-/--
-  Differentiate an encoded expression with respect to *every* variable
-  (univariate convention: every `var` is the independent variable).
-  The result is again an encoded expression. Arithmetic on coefficients
-  uses tree-calculus `tplus` / `ttimes` when both sides are constants.
--/
-partial def kernelDiff : Value → Option Value
+/-- Lean-side intensional walker; the specification of `tdiff`. -/
+partial def walkDiff : Value → Option Value
   | .fork tag payload =>
       match tag.toNat? with
       | some 0 =>
@@ -145,7 +139,7 @@ partial def kernelDiff : Value → Option Value
       | some 2 =>
           match payload with
           | .fork a b =>
-              match kernelDiff a, kernelDiff b with
+              match walkDiff a, walkDiff b with
               | some da, some db =>
                   some (Expr.tagged 2 (.fork da db))
               | _, _ => none
@@ -154,7 +148,7 @@ partial def kernelDiff : Value → Option Value
           -- (uv)' = u'v + uv'
           match payload with
           | .fork a b =>
-              match kernelDiff a, kernelDiff b with
+              match walkDiff a, walkDiff b with
               | some da, some db =>
                   let left  := Expr.tagged 3 (.fork da b)
                   let right := Expr.tagged 3 (.fork a db)
@@ -171,7 +165,7 @@ partial def kernelDiff : Value → Option Value
                   | some 0 =>
                       match bp with
                       | .fork .leaf mag =>
-                          match mag.toNat?, kernelDiff a with
+                          match mag.toNat?, walkDiff a with
                           | some n, some da =>
                               let nE   := Expr.encode (.const (Int.ofNat n))
                               let nm1  := Expr.encode (.const (Int.ofNat (n - 1)))
@@ -180,16 +174,28 @@ partial def kernelDiff : Value → Option Value
                               some (Expr.tagged 3 (.fork mid da))
                           | _, _ => none
                       | _ => none
-                  | _ => none
+                  | _ =>
+                      -- non-constant exponent: a^b · (b' ln a + b · a'/a)
+                      match walkDiff a, walkDiff b with
+                      | some da, some db =>
+                          let lnA  := Expr.tagged 10 a
+                          let invA := Expr.tagged 6 a
+                          let left := Expr.tagged 3 (.fork db lnA)
+                          let mid  := Expr.tagged 3 (.fork da invA)
+                          let right := Expr.tagged 3 (.fork b mid)
+                          let sum  := Expr.tagged 2 (.fork left right)
+                          let pow  := Expr.tagged 4 (.fork a b)
+                          some (Expr.tagged 3 (.fork pow sum))
+                      | _, _ => none
               | _ => none
           | _ => none
       | some 5 =>
-          match kernelDiff payload with
+          match walkDiff payload with
           | some da => some (Expr.tagged 5 da)
           | none    => none
       | some 6 =>
           -- (1/u)' = -u' / u^2
-          match kernelDiff payload with
+          match walkDiff payload with
           | some da =>
               let u2   := Expr.tagged 4 (.fork payload (Expr.encode (.const 2)))
               let inv  := Expr.tagged 6 u2
@@ -197,32 +203,36 @@ partial def kernelDiff : Value → Option Value
               some (Expr.tagged 5 prod)
           | none => none
       | some 7 =>
-          match kernelDiff payload with
+          match walkDiff payload with
           | some da =>
               let c := Expr.tagged 8 payload
               some (Expr.tagged 3 (.fork c da))
           | none => none
       | some 8 =>
-          match kernelDiff payload with
+          match walkDiff payload with
           | some da =>
               let s := Expr.tagged 7 payload
               let p := Expr.tagged 3 (.fork s da)
               some (Expr.tagged 5 p)
           | none => none
       | some 9 =>
-          match kernelDiff payload with
+          match walkDiff payload with
           | some da =>
               let e := Expr.tagged 9 payload
               some (Expr.tagged 3 (.fork e da))
           | none => none
       | some 10 =>
-          match kernelDiff payload with
+          match walkDiff payload with
           | some da =>
               let inv := Expr.tagged 6 payload
               some (Expr.tagged 3 (.fork da inv))
           | none => none
       | _ => none
   | _ => none
+
+/-- Reduce `tdiff ⬝ e`. -/
+def kernelDiff (e : Value) (fuel : Nat := Value.defaultFuel) : Option Value :=
+  run1 tdiff e fuel
 
 def kernelDiffExpr (e : Expr) : Option Expr :=
   match kernelDiff (Expr.encode e) with
@@ -240,6 +250,8 @@ def powProgram : Tree := tpow
 def predProgram : Tree := tpred
 def isZeroProgram : Tree := tisZero
 def notProgram : Tree := tnot
+def evalProgram : Tree := teval
+def diffProgram : Tree := tdiff
 
 def describeKernel : String :=
   "tree-calculus kernel\n\
@@ -249,7 +261,7 @@ def describeKernel : String :=
    times    Y2 (λn t m. triage {0, λn₁. plus m (t n₁ m), λ_ _. 0} n)\n\
    pow      Y2 (λe p b. triage {1, λe₁. times b (p e₁ b), λ_ _. 1} e)\n\
    expr     △ ⟨ctor⟩ ⟨payload⟩   ctor = stem-chain index\n\
-   eval     intensional triage + plus/times/pow reduction\n\
-   diff     intensional triage, result re-encoded as a tree"
+   eval     Y2 + nested triage; plus/times/pow for arithmetic\n\
+   diff     Y2 + nested triage; result is an encoded expression"
 
 end Cas

@@ -87,7 +87,7 @@ def apply! (fuel : Nat) (f x : Value) : Value :=
   | none   => panic! "tree calculus: evaluation budget exhausted"
 
 /-- Default budget large enough for the programs in this library. -/
-def defaultFuel : Nat := 200_000
+def defaultFuel : Nat := 2_000_000
 
 def app (f x : Value) : Option Value := apply defaultFuel f x
 

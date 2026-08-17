@@ -49,11 +49,15 @@ Two layers share the same encoding.
 transcendentals, with parse / pretty-print, substitution, constant
 folding, expansion, like-term collection, and symbolic differentiation.
 
-**Kernel** (`Cas.Kernel`) — the same expressions as trees
-(`△ ⟨ctor⟩ ⟨payload⟩`). Evaluation of a nat-polynomial walks the tree
-by constructor index (intensional analysis) and reduces `plus` / `times`
-/ `pow`, which are `Y2` programs written in the calculus. Differentiation
-is the same walk and returns a new tree.
+**Kernel** (`Cas.Program`, `Cas.Kernel`) — the same expressions as
+trees (`△ ⟨ctor⟩ ⟨payload⟩`). `teval` and `tdiff` are `Y2` programs:
+a `triage` dispatch inspects the constructor *before* the recursor is
+applied, then `plus` / `times` / `pow` do the arithmetic.
+
+```
+teval ⬝ ⌜x^2+1⌝ ⬝ ⌜3⌝  →*  ⌜10⌝
+tdiff ⬝ ⌜x^2⌝          →*  ⌜2x⌝
+```
 
 ## Build
 
@@ -68,6 +72,8 @@ lake exe cas normalize "(x+1)*(x-1)"
 lake exe cas arith 2 + 3
 lake exe cas reduce "S K K △"
 lake exe cas kernel-eval "x^2+1" x=3
+lake exe cas kernel-diff "x^2 + sin(x)"
+lake exe cas test
 ```
 
 ## Layout
@@ -81,6 +87,7 @@ Cas/Expr.lean       surface AST ↔ tree
 Cas/Algebra.lean    eval, subst, simplify, expand, collect
 Cas/Diff.lean       symbolic differentiation + lemmas
 Cas/Parse.lean      expression and tree parsers
-Cas/Kernel.lean     intensional eval / diff
-Cas/Tests.lean      compile-time #guard checks
+Cas/Program.lean    teval / tdiff as Y2 + triage programs
+Cas/Kernel.lean     run those programs; Lean walkers as spec
+Cas/Tests.lean      compile-time #guard checks + runtime self-test
 ```

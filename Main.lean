@@ -8,6 +8,7 @@ def usage : String :=
    \n\
    Usage:\n\
      cas                     run the built-in demo\n\
+     cas test                reduce teval / tdiff on a small suite\n\
      cas help                this message\n\
      cas eval <expr> [x=n …] evaluate (ℤ if possible, else Float)\n\
      cas simplify <expr>     rewrite + constant fold\n\
@@ -21,11 +22,22 @@ def usage : String :=
      cas kernel-eval <expr> x=<n>\n\
                              evaluate a nat-polynomial by tree reduction\n\
      cas kernel-diff <expr>  differentiate the encoded tree\n\
-     cas show plus|times|pow|pred|not\n\
+     cas show plus|times|pow|pred|not|eval|diff\n\
                              print a kernel combinator\n\
    \n\
      expressions:  2*x^3 + sin(x) - 1/x\n\
      trees:        △, K, S, I, nats, juxtaposition, parentheses\n"
+
+def runProgramSelfTest : IO Bool := do
+  IO.println s!"   teval {teval.size} nodes (program {teval.isProgram})"
+  IO.println s!"   tdiff {tdiff.size} nodes (program {tdiff.isProgram})"
+  match Cas.Tests.programSelfTest with
+  | none =>
+      IO.println "   program self-test: ok"
+      return true
+  | some name =>
+      IO.eprintln s!"   program self-test failed: {name}"
+      return false
 
 def demo : IO Unit := do
   IO.println "CAS in tree calculus"
@@ -69,21 +81,35 @@ def demo : IO Unit := do
   showE "norm   (x+1)*(x-1)  =  " "(x+1)*(x-1)" (fun e => toString (Expr.normalize e))
   showE "d/dx   x^2 + sin(x) =  " "x^2 + sin(x)" (fun e => toString (Expr.dsimp "x" e))
   IO.println ""
-  IO.println "4. Expressions are trees"
+  IO.println "4. eval / diff as tree programs"
+  IO.println s!"   teval  ({teval.size} nodes)"
+  IO.println s!"   tdiff  ({tdiff.size} nodes)"
   match parseExpr? "x+1" with
   | none => pure ()
   | some e =>
-      let t := Expr.encode e
-      IO.println s!"   encode(x+1)  =  {t}"
-      match Expr.decode t with
-      | some e' => IO.println s!"   decode       =  {e'}"
-      | none    => IO.println "   decode failed"
+      IO.println s!"   encode(x+1)  =  {Expr.encode e}"
       match kernelEvalExpr 4 e with
-      | some n => IO.println s!"   kernel-eval at 4  ⇒  {n}"
-      | none   => IO.println "   kernel-eval at 4  ⇒  (not a nat polynomial)"
+      | some n => IO.println s!"   teval ⬝ ⌜x+1⌝ ⬝ ⌜4⌝  ⇒  {n}"
+      | none   => IO.println "   teval ⬝ ⌜x+1⌝ ⬝ ⌜4⌝  ⇒  (diverged)"
       match kernelDiffExpr e with
-      | some d => IO.println s!"   kernel-diff       ⇒  {Expr.simplify d}"
-      | none   => IO.println "   kernel-diff failed"
+      | some d => IO.println s!"   tdiff ⬝ ⌜x+1⌝        ⇒  {Expr.simplify d}"
+      | none   => IO.println "   tdiff ⬝ ⌜x+1⌝        ⇒  (diverged)"
+  match parseExpr? "x^2+1" with
+  | none => pure ()
+  | some e =>
+      match kernelEvalExpr 3 e with
+      | some n => IO.println s!"   teval ⬝ ⌜x^2+1⌝ ⬝ ⌜3⌝ ⇒  {n}"
+      | none   => IO.println "   teval ⬝ ⌜x^2+1⌝ ⬝ ⌜3⌝ ⇒  (diverged)"
+      match kernelDiffExpr e with
+      | some d => IO.println s!"   tdiff ⬝ ⌜x^2+1⌝       ⇒  {Expr.simplify d}"
+      | none   => IO.println "   tdiff ⬝ ⌜x^2+1⌝       ⇒  (diverged)"
+  match parseExpr? "sin(x)" with
+  | none => pure ()
+  | some e =>
+      match kernelDiffExpr e with
+      | some d => IO.println s!"   tdiff ⬝ ⌜sin(x)⌝      ⇒  {Expr.simplify d}"
+      | none   => IO.println "   tdiff ⬝ ⌜sin(x)⌝      ⇒  (diverged)"
+  let _ ← runProgramSelfTest
   IO.println ""
   IO.println describeKernel
 
@@ -110,6 +136,8 @@ def main (args : List String) : IO UInt32 := do
   | ["help"] | ["-h"] | ["--help"] =>
       IO.println usage
       return 0
+  | ["test"] =>
+      if (← runProgramSelfTest) then return 0 else return 1
   | "eval" :: rest =>
       match needExpr rest with
       | .error m => fail m
@@ -235,6 +263,8 @@ def main (args : List String) : IO UInt32 := do
         | "pow"   => some powProgram
         | "pred"  => some predProgram
         | "not"   => some notProgram
+        | "eval"  => some evalProgram
+        | "diff"  => some diffProgram
         | "I"     => some I
         | "K"     => some K
         | "S"     => some S
