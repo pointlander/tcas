@@ -30,16 +30,9 @@ def star (x : String) : Tree → Tree
     if !(Tree.occurs x (f ⬝ a)) then
       K ⬝ (f ⬝ a)
     else
-      match a with
-      | .ref y =>
-        if x == y then
-          -- Website S: `λx. f x` is `△ (△ [x]f) I`, not Jay's flipped `△ (△ I) [x]f`.
-          -- η is omitted: `λx. △ x` is a stem constructor, not the identity of `△`.
-          d (star x f) ⬝ I
-        else
-          d (star x f) ⬝ (K ⬝ .ref y)
-      | _ =>
-        d (star x f) ⬝ star x a
+      -- Website S: `([x](f a)) N → ([x]f) N (([x]a) N)`.
+      -- No η: `λx. △ x` must stay a stem constructor.
+      d (star x f) ⬝ star x a
 
 notation:max "λ*" x:max ", " b:arg => star x b
 

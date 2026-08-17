@@ -40,6 +40,10 @@ namespace Cas.Tests
 #guard (eval! (tisZero ⬝ ofNat 2)).toTree == tfalse
 #guard (eval! (△ ⬝ ofNat 3)).toNat? == some 4
 
+#guard plusV (Value.ofNat 2) (Value.ofNat 3) == Value.ofNat 5
+#guard mulV (Value.ofNat 3) (Value.ofNat 4) == Value.ofNat 12
+#guard powV (Value.ofNat 2) (Value.ofNat 5) == Value.ofNat 32
+
 /-! ### Pairs -/
 
 #guard (eval! (tfirst ⬝ (tpair (ofNat 2) (ofNat 5)))).toNat? == some 2

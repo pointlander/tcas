@@ -20,7 +20,7 @@ inductive Value where
   | leaf : Value
   | stem : Value → Value
   | fork : Value → Value → Value
-  deriving BEq, Repr, Inhabited
+  deriving BEq, Repr, Inhabited, DecidableEq
 
 namespace Value
 

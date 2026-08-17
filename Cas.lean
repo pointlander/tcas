@@ -8,3 +8,5 @@ import Cas.Diff
 import Cas.Parse
 import Cas.Program
 import Cas.Kernel
+import Cas.Semantics
+import Cas.Arith

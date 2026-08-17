@@ -76,6 +76,16 @@ lake exe cas kernel-diff "x^2 + sin(x)"
 lake exe cas test
 ```
 
+## Proofs
+
+`Cas/Arith.lean` records the denotation of unary-nat arithmetic
+(`plusV`, `mulV`, `powV`) and proves it matches `Nat` `+` / `*` / `^`.
+Any 2-argument function with the same recurrences is unique on encoded
+nats (`plus_rec_unique`, and the same for times and pow). Predecessor
+and zero-test reduce by unfolding the small `triage` programs.
+`evalPoly` is the denotation of kernel evaluation on nat-polynomials
+and agrees with ordinary `Nat` evaluation (`evalPoly_natPoly`).
+
 ## Layout
 
 ```
@@ -89,5 +99,7 @@ Cas/Diff.lean       symbolic differentiation + lemmas
 Cas/Parse.lean      expression and tree parsers
 Cas/Program.lean    teval / tdiff as Y2 + triage programs
 Cas/Kernel.lean     run those programs; Lean walkers as spec
+Cas/Semantics.lean  fuelled evaluator lemmas (K, I, wait, values)
+Cas/Arith.lean      plus/times/pow denotation, uniqueness, pred/isZero
 Cas/Tests.lean      compile-time #guard checks + runtime self-test
 ```
