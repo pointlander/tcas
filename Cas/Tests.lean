@@ -114,6 +114,23 @@ namespace Cas.Tests
 #guard tbTimes.isProgram && tbPow.isProgram
 #guard tbCmp.isProgram && tbMinus.isProgram
 #guard minusBinV (Value.ofBin 5) (Value.ofBin 3) == Value.ofBin 2
+#guard (tbDiv ()).isProgram && (tbMod ()).isProgram && (tbGcd ()).isProgram
+#guard divBinV (Value.ofBin 10) (Value.ofBin 3) == Value.ofBin 3
+#guard modBinV (Value.ofBin 10) (Value.ofBin 3) == Value.ofBin 1
+#guard gcdBinV (Value.ofBin 12) (Value.ofBin 8) == Value.ofBin 4
+
+/-! ### Rationals -/
+
+#guard Value.toRat? (Value.ofRat 2 4) == some (1, 2)
+#guard Value.toRat? (Value.ofRat (-6) 9) == some (-2, 3)
+#guard Value.toRat? (Value.ofRat 0 7) == some (0, 1)
+#guard Value.toRat? (Value.ofRat 5 1) == some (5, 1)
+#guard plusRatV (Value.ofRat 1 2) (Value.ofRat 1 3) == Value.ofRat 5 6
+#guard mulRatV (Value.ofRat 2 3) (Value.ofRat 3 4) == Value.ofRat 1 2
+#guard invRatV (Value.ofRat 2 3) == Value.ofRat 3 2
+#guard invRatV (Value.ofRat (-2) 3) == Value.ofRat (-3) 2
+#guard (tmkRat ()).isProgram && (trPlus ()).isProgram && (trTimes ()).isProgram
+#guard trNeg.isProgram && (trInv ()).isProgram && (trDiv ()).isProgram
 
 /-! ### Surface CAS -/
 
@@ -201,11 +218,11 @@ private def traceDone (t v : Tree) : Bool :=
 /-! ### Compiled eval / diff programs (construction only; reduction is runtime) -/
 
 #guard (eval! (Tm.compile (Tm.lam "x" (Tm.embed I ◃ Tm.v "x")) ⬝ △)).toTree == △
-#guard teval.size > 0
+#guard (teval ()).size > 0
 #guard tdiff.size > 0
 
 /-- Runtime checks for `teval` / `tdiff`. Returns `none` on success. -/
-def programSelfTest : Option String :=
+def programSelfTest (_ : Unit := ()) : Option String :=
   let ev (s : String) (n : Nat) : Option Nat :=
     match parseExpr? s with
     | some e => kernelEvalExpr n e
@@ -234,6 +251,14 @@ def programSelfTest : Option String :=
       then none else some "teval -2"
     , if ev "2*x+1" 3 == some 7 then none else some "teval 2*x+1 @ 3"
     , if ev "x^2+1" 3 == some 10 then none else some "teval x^2+1 @ 3"
+    , if kernelEvalRat 0 (parseExpr? "1/2" |>.getD (.const 0)) == some (1, 2)
+      then none else some "teval 1/2"
+    , if kernelEvalRat 0 (parseExpr? "1/2+1/3" |>.getD (.const 0)) == some (5, 6)
+      then none else some "teval 1/2+1/3"
+    , if kernelEvalRat 4 (parseExpr? "1/x" |>.getD (.const 0)) == some (1, 4)
+      then none else some "teval 1/x @ 4"
+    , if kernelEvalRat 3 (parseExpr? "(x-1)/(x+1)" |>.getD (.const 0)) == some (1, 2)
+      then none else some "teval (x-1)/(x+1) @ 3"
     , expect "tdiff 2" (kd "2") (some "0")
     , expect "tdiff x" (kd "x") (some "1")
     , expect "tdiff x+1" (kd "x+1") (some "1")
@@ -267,6 +292,15 @@ def programSelfTest : Option String :=
       else some "bin 10-3"
     , if kernelBinSub (Value.ofBin 3) (Value.ofBin 10) == some 0 then none
       else some "bin 3-10"
+    , match kernelRAdd (Value.ofRat 1 2) (Value.ofRat 1 3) with
+      | some v => if v.toRat? == some (5, 6) then none else some "rat 1/2+1/3"
+      | none => some "rat 1/2+1/3: diverged"
+    , match kernelRMul (Value.ofRat 2 3) (Value.ofRat 3 4) with
+      | some v => if v.toRat? == some (1, 2) then none else some "rat 2/3*3/4"
+      | none => some "rat 2/3*3/4: diverged"
+    , match kernelRInv (Value.ofRat 2 3) with
+      | some v => if v.toRat? == some (3, 2) then none else some "rat inv 2/3"
+      | none => some "rat inv 2/3: diverged"
     , match kernelMinus (Value.ofNat 5) (Value.ofNat 3) with
       | some v => if v.toNat? == some 2 then none else some "minus 5 3"
       | none => some "minus 5 3: diverged"

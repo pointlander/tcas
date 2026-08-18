@@ -282,6 +282,29 @@ def toInt? : Value → Option Int
       | none   => none
   | _ => none
 
+/-- Reduced rational `p/q` with `q > 0`. Stored as `△ ⌜p⌝ ⌜q⌝₂`.
+    A zero denominator is mapped to `0/1`. -/
+def ofRat (p : Int) (q : Nat) : Value :=
+  if q = 0 then
+    .fork (ofInt 0) (ofBin 1)
+  else
+    let g := Nat.gcd p.natAbs q
+    let p' : Int :=
+      match p with
+      | .ofNat n   => .ofNat (n / g)
+      | .negSucc n => Int.negOfNat ((n + 1) / g)
+    .fork (ofInt p') (ofBin (q / g))
+
+def toRat? : Value → Option (Int × Nat)
+  | .fork num den =>
+      match toInt? num, toBin? den with
+      | some p, some q => if q = 0 then none else some (p, q)
+      | _, _ => none
+  | _ => none
+
+def formatRat (p : Int) (q : Nat) : String :=
+  if q = 1 then ToString.toString p else s!"{ToString.toString p}/{q}"
+
 /-- Structural (intensional) equality of values. The denotation of `tequal`. -/
 def equalV : Value → Value → Bool
   | .leaf, .leaf         => true
@@ -318,6 +341,7 @@ end Value
 def encodeNat (n : Nat) : Tree := (Value.ofNat n).toTree
 def encodeBin (n : Nat) : Tree := (Value.ofBin n).toTree
 def encodeInt (i : Int) : Tree := (Value.ofInt i).toTree
+def encodeRat (p : Int) (q : Nat) : Tree := (Value.ofRat p q).toTree
 def encodeBool (b : Bool) : Tree := (Value.ofBool b).toTree
 
 theorem ofBool_false : Value.ofBool false = .leaf := rfl

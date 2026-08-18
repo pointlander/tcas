@@ -21,7 +21,7 @@ def usage : String :=
      cas trace <tree> [n]    show each of the five rules (at most n steps)\n\
      cas arith <n> +|*|^ <m> natural arithmetic via tree reduction\n\
      cas kernel-eval <expr> x=<n>\n\
-                             evaluate a polynomial by tree reduction (ℤ)\n\
+                             evaluate by tree reduction (ℚ)\n\
      cas kernel-diff <expr>  differentiate the encoded tree\n\
      cas equal <t1> <t2>     intensional equality of two tree programs\n\
      cas size <tree>         count nodes of a tree program\n\
@@ -31,18 +31,21 @@ def usage : String :=
      cas bin succ|pred <n>   binary successor / predecessor\n\
      cas int +|-|* <i> <j>   signed-int arithmetic\n\
      cas int neg <i>         signed-int negation\n\
-     cas show plus|times|pow|pred|minus|iplus|eval|diff\n\
+     cas rat +|-|*|/ <p/q> <r/s>\n\
+                             reduced rational arithmetic\n\
+     cas rat inv <p/q>       rational reciprocal\n\
+     cas show plus|times|pow|pred|minus|iplus|rplus|eval|diff\n\
                              print a kernel combinator\n\
    \n\
      expressions:  2*x^3 + sin(x) - 1/x\n\
      trees:        △, K, S, I, nats, juxtaposition, parentheses\n"
 
 def runProgramSelfTest : IO Bool := do
-  IO.println s!"   teval {teval.size} nodes (program {teval.isProgram})"
+  IO.println s!"   teval {(teval ()).size} nodes (program {(teval ()).isProgram})"
   IO.println s!"   tdiff {tdiff.size} nodes (program {tdiff.isProgram})"
   IO.println s!"   tequal {tequal.size} nodes (program {tequal.isProgram})"
   IO.println s!"   tsize {tsize.size} nodes (program {tsize.isProgram})"
-  match Cas.Tests.programSelfTest with
+  match Cas.Tests.programSelfTest () with
   | none =>
       IO.println "   program self-test: ok"
       return true
@@ -93,7 +96,7 @@ def demo : IO Unit := do
   showE "d/dx   x^2 + sin(x) =  " "x^2 + sin(x)" (fun e => toString (Expr.dsimp "x" e))
   IO.println ""
   IO.println "4. eval / diff as tree programs"
-  IO.println s!"   teval  ({teval.size} nodes)"
+  IO.println s!"   teval  ({(teval ()).size} nodes)"
   IO.println s!"   tdiff  ({tdiff.size} nodes)"
   match parseExpr? "x+1" with
   | none => pure ()
@@ -132,6 +135,12 @@ def demo : IO Unit := do
       match kernelEvalInt 4 e with
       | some n => IO.println s!"   teval ⬝ ⌜1-x⌝ ⬝ ⌜4⌝   ⇒  {n}"
       | none   => IO.println "   teval ⬝ ⌜1-x⌝ ⬝ ⌜4⌝   ⇒  (diverged)"
+  match parseExpr? "1/2+1/3" with
+  | none => pure ()
+  | some e =>
+      match kernelEvalRat 0 e with
+      | some (p, q) => IO.println s!"   teval ⬝ ⌜1/2+1/3⌝    ⇒  {Value.formatRat p q}"
+      | none => IO.println "   teval ⬝ ⌜1/2+1/3⌝    ⇒  (diverged)"
   IO.println ""
   IO.println "5. Reduction trace (cas trace \"K 3 7\")"
   IO.println (formatTrace (K ⬝ ofNat 3 ⬝ ofNat 7))
@@ -192,7 +201,16 @@ def kernelNamed : String → Option Tree
   | "btimes" => some btimesProgram
   | "bpow"  => some bpowProgram
   | "bminus" => some bminusProgram
-  | "eval"  => some evalProgram
+  | "bdiv"  => some (bdivProgram ())
+  | "bmod"  => some (bmodProgram ())
+  | "bgcd"  => some (bgcdProgram ())
+  | "rneg"  => some rnegProgram
+  | "rinv"  => some (rinvProgram ())
+  | "rplus" => some (rplusProgram ())
+  | "rminus" => some (rminusProgram ())
+  | "rtimes" => some (rtimesProgram ())
+  | "rdiv"  => some (rdivProgram ())
+  | "eval"  => some (evalProgram ())
   | "diff"  => some diffProgram
   | "I"     => some I
   | "K"     => some K
@@ -410,6 +428,53 @@ def main (args : List String) : IO UInt32 := do
               else
                 fail s!"unknown int operator {op} (use + - * neg)"
       | _, _ => fail "int expects two integers"
+  | "rat" :: "inv" :: s :: _ =>
+      match parseRat? s with
+      | none => fail "rat inv expects p or p/q"
+      | some (p, q) =>
+          match kernelRInv (Value.ofRat p q) with
+          | some v =>
+              match v.toRat? with
+              | some (p, q) =>
+                  IO.println (Value.formatRat p q)
+                  return 0
+              | none => fail "rat inv produced a non-rational"
+          | none => fail "rat inv exhausted the evaluation budget"
+  | "rat" :: "neg" :: s :: _ =>
+      match parseRat? s with
+      | none => fail "rat neg expects p or p/q"
+      | some (p, q) =>
+          match kernelRNeg (Value.ofRat p q) with
+          | some v =>
+              match v.toRat? with
+              | some (p, q) =>
+                  IO.println (Value.formatRat p q)
+                  return 0
+              | none => fail "rat neg produced a non-rational"
+          | none => fail "rat neg exhausted the evaluation budget"
+  | "rat" :: op :: sa :: sb :: _ =>
+      match parseRat? sa, parseRat? sb with
+      | some (a, b), some (c, d) =>
+          let r :=
+            match op with
+            | "+" => kernelRAdd (Value.ofRat a b) (Value.ofRat c d)
+            | "-" => kernelRSub (Value.ofRat a b) (Value.ofRat c d)
+            | "*" => kernelRMul (Value.ofRat a b) (Value.ofRat c d)
+            | "/" => kernelRDiv (Value.ofRat a b) (Value.ofRat c d)
+            | _   => none
+          match r with
+          | some v =>
+              match v.toRat? with
+              | some (p, q) =>
+                  IO.println (Value.formatRat p q)
+                  return 0
+              | none => fail "rat op produced a non-rational"
+          | none =>
+              if op == "+" || op == "-" || op == "*" || op == "/" then
+                fail "rational reduction diverged"
+              else
+                fail s!"unknown rat operator {op} (use + - * / inv neg)"
+      | _, _ => fail "rat expects two rationals (p or p/q)"
   | "arith" :: sa :: op :: sb :: _ =>
       let na := sa.toNat?
       let nb := sb.toNat?
@@ -448,9 +513,9 @@ def main (args : List String) : IO UInt32 := do
               | some xv =>
                   if xv < 0 then fail "kernel-eval expects a natural x"
                   else
-                    match kernelEvalInt xv.toNat e with
-                    | some n =>
-                        IO.println n
+                    match kernelEvalRat xv.toNat e with
+                    | some (p, q) =>
+                        IO.println (Value.formatRat p q)
                         return 0
                     | none => fail "kernel-eval could not evaluate the encoded tree"
   | "kernel-diff" :: rest =>

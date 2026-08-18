@@ -4,6 +4,7 @@ import Cas.Bracket
 import Cas.Encode
 import Cas.Bin
 import Cas.Int
+import Cas.Rat
 import Cas.Expr
 import Cas.Algebra
 import Cas.Diff

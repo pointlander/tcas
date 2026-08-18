@@ -15,6 +15,7 @@ import Cas.Encode
 import Cas.Bin
 import Cas.Expr
 import Cas.Int
+import Cas.Rat
 
 namespace Cas
 
@@ -85,35 +86,82 @@ end P
 
 private def ev (e : Tm) : Tm := P.v "rec" ◃ e ◃ P.v "x"
 
-/-- `λrec x. +0` -/
-private def evalK0 : Tm := P.lam "rec" (P.lam "x" (P.q tint0))
+/-- `λrec x. 0/1` -/
+private def evalK0 : Tm := P.lam "rec" (P.lam "x" (P.q trat0))
 
-/-- A constant is already an `ofInt`; return the payload as a signed value. -/
+/-- A constant is an `ofInt`; lift it to a rational with denominator `1`. -/
 private def evalConst (payload : Tm) : Tm :=
-  P.lam "rec" (P.lam "x" payload)
+  P.lam "rec" (P.lam "x" (P.q tintToRat ◃ payload))
 
-/-- The input `x` is a binary nat; pack it as `+x`. -/
+/-- The input `x` is a binary nat; pack it as `+x/1`. -/
 private def evalVar : Tm :=
-  P.lam "rec" (P.lam "x" (Tm.node ◃ Tm.node ◃ P.v "x"))
+  P.lam "rec" (P.lam "x" (P.q tintToRat ◃ (Tm.node ◃ Tm.node ◃ P.v "x")))
 
 private def evalAdd (payload : Tm) : Tm :=
   P.lam "rec" (P.lam "x"
-    (P.onPair payload (P.q tint0) fun a b =>
-      P.q tiPlus ◃ ev a ◃ ev b))
+    (P.onPair payload (P.q trat0) fun a b =>
+      P.q (trPlus ()) ◃ ev a ◃ ev b))
 
 private def evalMul (payload : Tm) : Tm :=
   P.lam "rec" (P.lam "x"
-    (P.onPair payload (P.q tint0) fun a b =>
-      P.q tiTimes ◃ ev a ◃ ev b))
+    (P.onPair payload (P.q trat0) fun a b =>
+      P.q (trTimes ()) ◃ ev a ◃ ev b))
 
+/-- Magnitude of an `ofInt`; `0` if the value is not a fork. -/
+private def magInt (z : Tm) : Tm :=
+  Tm.triage Tm.node (P.lam "_" Tm.node)
+    (P.lam "_" (P.lam "mmag" (P.v "mmag"))) z
+
+/-- Sign bit of an `ofInt`; `+` if the value is not a fork. -/
+private def signInt (z : Tm) : Tm :=
+  Tm.triage Tm.node (P.lam "_" Tm.node)
+    (P.lam "msign" (P.lam "_" (P.v "msign"))) z
+
+/-- `va ^ bnum` when `va` is a rational and `bnum` is an `ofInt` exponent. -/
+private def evalPowInt (va bnum : Tm) : Tm :=
+  Tm.triage (P.q trat0) (P.lam "_" (P.q trat0))
+    (P.lam "anum" (P.lam "aden"
+      (let e : Tm := magInt bnum
+       let s : Tm := signInt (P.v "anum")
+       let m : Tm := magInt (P.v "anum")
+       let s' : Tm :=
+         Tm.triage s (P.lam "_" Tm.node)
+           (P.lam "_" (P.lam "_" Tm.node))
+           (P.q tbEven ◃ e)
+       let r : Tm :=
+         Tm.node
+           ◃ (Tm.node ◃ s' ◃ (P.q tbPow ◃ e ◃ m))
+           ◃ (P.q tbPow ◃ e ◃ P.v "aden")
+       Tm.triage r (P.lam "_" (P.q (trInv ()) ◃ r))
+         (P.lam "_" (P.lam "_" (P.q trat0)))
+         (signInt bnum))))
+    va
+
+/-- Integer (or reciprocal) power of a rational; non-unit denominators on
+    the exponent yield `0/1`. -/
 private def evalPow (payload : Tm) : Tm :=
   P.lam "rec" (P.lam "x"
-    (P.onPair payload (P.q tint0) fun a b =>
-      P.q tmkInt ◃ Tm.node ◃
-        (P.q tbPow ◃ (P.unInt (ev b)) ◃ (P.unInt (ev a)))))
+    (P.onPair payload (P.q trat0) fun a b =>
+      Tm.triage (P.q trat0) (P.lam "_" (P.q trat0))
+        (P.lam "bnum" (P.lam "bden"
+          (Tm.triage (P.q trat0) (P.lam "_" (P.q trat0))
+            (P.lam "dbit" (P.lam "drest"
+              (Tm.triage
+                (Tm.triage (P.q trat0)
+                  (P.lam "_" (evalPowInt (ev a) (P.v "bnum")))
+                  (P.lam "_" (P.lam "_" (P.q trat0)))
+                  (P.v "dbit"))
+                (P.lam "_" (P.q trat0))
+                (P.lam "_" (P.lam "_" (P.q trat0)))
+                (P.v "drest"))))
+            (P.v "bden"))))
+        (ev b)))
 
 private def evalNeg (payload : Tm) : Tm :=
-  P.lam "rec" (P.lam "x" (P.q tiNeg ◃ ev payload))
+  P.lam "rec" (P.lam "x" (P.q trNeg ◃ ev payload))
+
+private def evalInv (payload : Tm) : Tm :=
+  P.lam "rec" (P.lam "x" (P.q (trInv ()) ◃ ev payload))
 
 /-- `rest` is the tag with the first stem peeled off (ctor ≥ 1). -/
 private def evalFrom1 (rest payload : Tm) : Tm :=
@@ -131,7 +179,12 @@ private def evalFrom1 (rest payload : Tm) : Tm :=
                 (P.lam "t"
                   (Tm.triage
                     (evalNeg payload)
-                    (P.lam "_" evalK0)
+                    (P.lam "t"
+                      (Tm.triage
+                        (evalInv payload)
+                        (P.lam "_" evalK0)
+                        (P.lam "_" (P.lam "_" evalK0))
+                        (P.v "t")))
                     (P.lam "_" (P.lam "_" evalK0))
                     (P.v "t")))
                 (P.lam "_" (P.lam "_" evalK0))
@@ -143,7 +196,7 @@ private def evalFrom1 (rest payload : Tm) : Tm :=
     (P.lam "_" (P.lam "_" evalK0))
     rest
 
-private def evalFork : Tm :=
+private def evalFork (_ : Unit := ()) : Tm :=
   P.lam "tag" (P.lam "payload"
     (Tm.triage
       (evalConst (P.v "payload"))
@@ -151,11 +204,13 @@ private def evalFork : Tm :=
       (P.lam "_" (P.lam "_" evalK0))
       (P.v "tag")))
 
-/-- Closed dispatch: leaf / stem / fork of an encoded expression. -/
-def dispatchEval : Tm :=
-  P.dispatch evalK0 (P.lam "_" evalK0) evalFork
+/-- Closed dispatch: leaf / stem / fork of an encoded expression.
+    A function so the embedded arithmetic programs are not built at init. -/
+def dispatchEval (_ : Unit := ()) : Tm :=
+  P.dispatch evalK0 (P.lam "_" evalK0) (evalFork ())
 
-def teval : Tree := Y2 (Tm.compile dispatchEval)
+/-- Built on demand so module init does not construct the 70k-node tree. -/
+def teval (_ : Unit := ()) : Tree := Y2 (Tm.compile (dispatchEval ()))
 
 /-! ### `tdiff`
 

@@ -266,6 +266,20 @@ def parseInt? (s : String) : Option Int :=
   else
     s.toNat?.map Int.ofNat
 
+/-- Parse `p`, `p/q`, or `-p/q` with a positive denominator. -/
+def parseRat? (s : String) : Option (Int × Nat) :=
+  let s := trim s
+  match s.splitOn "/" with
+  | [p] => (parseInt? p).map (fun i => (i, 1))
+  | [p, q] =>
+      match parseInt? p, parseInt? (trim q) with
+      | some i, some d =>
+          if d = 0 then none
+          else if d < 0 then some (-i, d.natAbs)
+          else some (i, d.toNat)
+      | _, _ => none
+  | _ => none
+
 def parseBinding (s : String) : Option (String × Int) :=
   let parts := s.splitOn "="
   match parts with

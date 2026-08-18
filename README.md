@@ -85,15 +85,18 @@ Binary nats (`Value.ofBin`) store bits LSB-first, so plus and times walk
 ```
 
 `tbPlus`, `tbTimes`, `tbMinus` and `tbPow` are `Y2` programs on that
-encoding.
+encoding. `tbGcd` / `tbDiv` / `tbMod` implement Euclidean division.
 
 Signed integers are sign-magnitude (`+n = △ △ n`, `−n = △ (△ △) n`)
-with a **binary** magnitude. Kernel eval and diff use that encoding, so
-`tiPlus` / `tdiff` walk bits rather than stems:
+with a **binary** magnitude. Rationals are a reduced pair
+`p/q = △ ⌜p⌝ ⌜q⌝₂`. Kernel eval uses that encoding, so `inv` and
+division compute:
 
 ```
-teval ⬝ ⌜x-1⌝ ⬝ ⌜4⌝  →*  ⌜3⌝
-teval ⬝ ⌜1-x⌝ ⬝ ⌜4⌝  →*  ⌜-3⌝
+teval ⬝ ⌜x-1⌝ ⬝ ⌜4⌝     →*  ⌜3⌝
+teval ⬝ ⌜1-x⌝ ⬝ ⌜4⌝     →*  ⌜-3⌝
+teval ⬝ ⌜1/2+1/3⌝       →*  ⌜5/6⌝
+teval ⬝ ⌜1/x⌝ ⬝ ⌜4⌝     →*  ⌜1/4⌝
 ```
 
 `cas trace` walks the same call-by-value order as `eval`: the redex is
@@ -134,7 +137,11 @@ lake exe cas kernel-eval "x-1" x=4
 lake exe cas kernel-eval "1-x" x=4
 lake exe cas int + 3 -5
 lake exe cas int - 1 4
+lake exe cas rat + 1/2 1/3
+lake exe cas rat inv 2/3
 lake exe cas kernel-eval "x^2+1" x=3
+lake exe cas kernel-eval "1/2+1/3" x=0
+lake exe cas kernel-eval "1/x" x=4
 lake exe cas kernel-diff "x^2 + sin(x)"
 lake exe cas test
 ```
@@ -148,6 +155,7 @@ nats (`plus_rec_unique`, and the same for times and pow). Predecessor
 and zero-test reduce by unfolding the small `triage` programs.
 `evalPoly` is the denotation of kernel evaluation on nat-polynomials
 and agrees with ordinary `Nat` evaluation (`evalPoly_natPoly`).
+`toRat_ofRat` says a coprime `p/q` decodes as itself.
 
 ## Layout
 
@@ -158,6 +166,7 @@ Cas/Bracket.lean    star abstraction, Y2
 Cas/Encode.lean     bool / nat / pair / list, plus, times, pow, equal, size
 Cas/Bin.lean        little-endian binary nats and their programs
 Cas/Int.lean        sign-magnitude integers; plus / minus / times
+Cas/Rat.lean        reduced rationals; plus / minus / times / inv
 Cas/Expr.lean       surface AST ↔ tree
 Cas/Algebra.lean    eval, subst, simplify, expand, collect
 Cas/Diff.lean       symbolic differentiation + lemmas

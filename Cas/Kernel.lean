@@ -10,6 +10,7 @@
 import Cas.Encode
 import Cas.Bin
 import Cas.Int
+import Cas.Rat
 import Cas.Expr
 import Cas.Algebra
 import Cas.Diff
@@ -98,6 +99,21 @@ def kernelBinSub (a b : Value) (fuel : Nat := Value.defaultFuel) : Option Nat :=
   | some v => v.toBin?
   | none   => none
 
+def kernelBinDiv (a b : Value) (fuel : Nat := Value.defaultFuel) : Option Nat :=
+  match run2 (tbDiv ()) a b fuel with
+  | some v => v.toBin?
+  | none   => none
+
+def kernelBinMod (a b : Value) (fuel : Nat := Value.defaultFuel) : Option Nat :=
+  match run2 (tbMod ()) a b fuel with
+  | some v => v.toBin?
+  | none   => none
+
+def kernelBinGcd (a b : Value) (fuel : Nat := Value.defaultFuel) : Option Nat :=
+  match run2 (tbGcd ()) a b fuel with
+  | some v => v.toBin?
+  | none   => none
+
 /-! ### Intensional analysis of encoded expressions
 
   A fork `△ tag payload` is an expression constructor. Nested stems on
@@ -120,36 +136,39 @@ def pairPayload? : Value → Option (Value × Value)
   | .fork a b => some (a, b)
   | _         => none
 
+/-- Lift an `ofInt` constant (or a binary input) to a reduced rational. -/
+def liftInt (v : Value) : Value :=
+  match v.toInt? with
+  | some i => Value.ofRat i 1
+  | none =>
+      match v.toBin? with
+      | some n => Value.ofRat (Int.ofNat n) 1
+      | none => Value.ofRat 0 1
+
 /-- Lean-side intensional walker; the specification of `teval`.
-    Results are sign-magnitude integers (`Value.ofInt`). -/
+    Results are reduced rationals (`Value.ofRat`). -/
 partial def walkEval (x : Value) (e : Value) : Option Value :=
   match e with
   | .fork tag payload =>
       match tag.toNat? with
       | some 0 =>
-          -- const: payload is already an `ofInt`
-          some payload
+          -- const: payload is an `ofInt`; lift to `p/1`
+          some (liftInt payload)
       | some 1 =>
-          -- var: pack the binary input as `+x`
-          some (.fork .leaf x)
+          -- var: pack the binary input as `+x/1`
+          some (liftInt x)
       | some 2 =>
           match payload with
           | .fork a b =>
               match walkEval x a, walkEval x b with
-              | some va, some vb =>
-                  match va.toInt?, vb.toInt? with
-                  | some i, some j => some (Value.ofInt (i + j))
-                  | _, _ => none
+              | some va, some vb => some (plusRatV va vb)
               | _, _ => none
           | _ => none
       | some 3 =>
           match payload with
           | .fork a b =>
               match walkEval x a, walkEval x b with
-              | some va, some vb =>
-                  match va.toInt?, vb.toInt? with
-                  | some i, some j => some (Value.ofInt (i * j))
-                  | _, _ => none
+              | some va, some vb => some (mulRatV va vb)
               | _, _ => none
           | _ => none
       | some 4 =>
@@ -157,32 +176,47 @@ partial def walkEval (x : Value) (e : Value) : Option Value :=
           | .fork a b =>
               match walkEval x a, walkEval x b with
               | some va, some vb =>
-                  match va.toInt?, vb.toInt? with
-                  | some i, some j =>
-                      if 0 ≤ j then
-                        some (Value.ofInt (i ^ j.toNat))
-                      else none
+                  match va.toRat?, vb.toRat? with
+                  | some (p, q), some (e, 1) =>
+                      let n := e.natAbs
+                      let r := Value.ofRat (p ^ n) (q ^ n)
+                      if e < 0 then some (invRatV r) else some r
                   | _, _ => none
               | _, _ => none
           | _ => none
       | some 5 =>
           match walkEval x payload with
-          | some v =>
-              match v.toInt? with
-              | some i => some (Value.ofInt (-i))
-              | none => none
+          | some v => some (negRatV v)
+          | none => none
+      | some 6 =>
+          match walkEval x payload with
+          | some v => some (invRatV v)
           | none => none
       | _ => none
   | _ => none
 
-/-- Reduce `teval ⬝ e ⬝ x`. -/
+/-- Cancel an `ofRat` pair. Uses the Lean `ofRat` reducer; `tmkRat` is the
+    matching tree program, kept for the kernel combinator list. -/
+def reduceRat (v : Value) : Option Value :=
+  match v.toRat? with
+  | some (p, q) => some (Value.ofRat p q)
+  | none => some (Value.ofRat 0 1)
+
+/-- Reduce `teval ⬝ e ⬝ x`, then cancel the resulting fraction. -/
 def kernelEval (x e : Value) (fuel : Nat := Value.defaultFuel) : Option Value :=
-  run2 teval e x fuel
+  match run2 (teval ()) e x fuel with
+  | some v => reduceRat v
+  | none => none
+
+def kernelEvalRat (x : Nat) (e : Expr) : Option (Int × Nat) :=
+  match kernelEval (Value.ofBin x) (Expr.encode e) with
+  | some v => v.toRat?
+  | none   => none
 
 def kernelEvalInt (x : Nat) (e : Expr) : Option Int :=
-  match kernelEval (Value.ofBin x) (Expr.encode e) with
-  | some v => v.toInt?
-  | none   => none
+  match kernelEvalRat x e with
+  | some (p, 1) => some p
+  | _ => none
 
 def kernelEvalExpr (x : Nat) (e : Expr) : Option Nat :=
   match kernelEvalInt x e with
@@ -203,6 +237,36 @@ def kernelIMul (a b : Value) : Option Value :=
 
 def kernelINeg (a : Value) : Option Value :=
   run1 tiNeg a
+
+def kernelRAdd (a b : Value) : Option Value :=
+  match run2 (trPlus ()) a b with
+  | some v => reduceRat v
+  | none => none
+
+def kernelRSub (a b : Value) : Option Value :=
+  match run2 (trMinus ()) a b with
+  | some v => reduceRat v
+  | none => none
+
+def kernelRMul (a b : Value) : Option Value :=
+  match run2 (trTimes ()) a b with
+  | some v => reduceRat v
+  | none => none
+
+def kernelRDiv (a b : Value) : Option Value :=
+  match run2 (trDiv ()) a b with
+  | some v => reduceRat v
+  | none => none
+
+def kernelRNeg (a : Value) : Option Value :=
+  match run1 trNeg a with
+  | some v => reduceRat v
+  | none => none
+
+def kernelRInv (a : Value) : Option Value :=
+  match run1 (trInv ()) a with
+  | some v => reduceRat v
+  | none => none
 
 /-- Lean-side intensional walker; the specification of `tdiff`. -/
 partial def walkDiff : Value → Option Value
@@ -336,12 +400,21 @@ def bplusProgram : Tree := tbPlus
 def btimesProgram : Tree := tbTimes
 def bpowProgram : Tree := tbPow
 def bminusProgram : Tree := tbMinus
+def bdivProgram (_ : Unit := ()) : Tree := tbDiv ()
+def bmodProgram (_ : Unit := ()) : Tree := tbMod ()
+def bgcdProgram (_ : Unit := ()) : Tree := tbGcd ()
 def minusProgram : Tree := tminus
 def inegProgram : Tree := tiNeg
 def iplusProgram : Tree := tiPlus
 def iminusProgram : Tree := tiMinus
 def itimesProgram : Tree := tiTimes
-def evalProgram : Tree := teval
+def rnegProgram : Tree := trNeg
+def rinvProgram (_ : Unit := ()) : Tree := trInv ()
+def rplusProgram (_ : Unit := ()) : Tree := trPlus ()
+def rminusProgram (_ : Unit := ()) : Tree := trMinus ()
+def rtimesProgram (_ : Unit := ()) : Tree := trTimes ()
+def rdivProgram (_ : Unit := ()) : Tree := trDiv ()
+def evalProgram : Unit → Tree := fun _ => teval ()
 def diffProgram : Tree := tdiff
 
 def describeKernel : String :=
@@ -357,6 +430,7 @@ def describeKernel : String :=
    equal    Y2 + nested triage on both arguments (intensional)\n\
    size     Y2 + triage {1, λx. succ (size x), λx y. succ (size x + size y)}\n\
    binary   0 = △, 2k = △ △ k, 2k+1 = △ (△ △) k  (LSB first)\n\
-   int      +n = △ △ ⌜n⌝₂, −n = △ (△ △) ⌜n⌝₂   (binary magnitude)"
+   int      +n = △ △ ⌜n⌝₂, −n = △ (△ △) ⌜n⌝₂   (binary magnitude)\n\
+   rat      p/q = △ ⌜p⌝ ⌜q⌝₂   (reduced; kernel eval / inv)"
 
 end Cas

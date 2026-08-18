@@ -510,4 +510,105 @@ theorem minusBinV_ofBin (m n : Nat) :
     minusBinV (Value.ofBin m) (Value.ofBin n) = Value.ofBin (m - n) := by
   simp [minusBinV, Value.toBin_ofBin]
 
+/-- `1` as a binary nat. -/
+def tbin1 : Tree := △ ⬝ ttrue ⬝ △
+
+/-- `true` iff the binary nat is even. -/
+def tbEven : Tree :=
+  triage ttrue (K ⬝ tfalse)
+    (star "bit" (star "_" (
+      triage ttrue (K ⬝ tfalse) (K ⬝ (K ⬝ tfalse)) ⬝ .ref "bit")))
+
+/-- Saturating `m % n` (`m % 0 = m`). -/
+def tbMod (_ : Unit := ()) : Tree :=
+  Y2 <| Tm.compile <|
+    lam "m" <|
+      Tm.triage
+        (lam "mod" (lam "n" Tm.node))
+        (lam "_" (lam "mod" (lam "n" Tm.node)))
+        (lam "b" <| lam "m1" <| lam "mod" <| lam "n" <|
+          let mval : Tm := Tm.node ◃ v "b" ◃ v "m1"
+          Tm.triage
+            mval
+            (lam "_" mval)
+            (lam "_" (lam "_"
+              (Tm.triage
+                mval
+                (lam "_" Tm.node)
+                (lam "_" (lam "_"
+                  (v "mod" ◃ (q tbRawSub ◃ mval ◃ v "n") ◃ v "n")))
+                (q tbCmp ◃ mval ◃ v "n"))))
+            (v "n"))
+        (v "m")
+
+/-- Saturating `m / n` (`m / 0 = 0`). -/
+def tbDiv (_ : Unit := ()) : Tree :=
+  Y2 <| Tm.compile <|
+    lam "m" <|
+      Tm.triage
+        (lam "div" (lam "n" Tm.node))
+        (lam "_" (lam "div" (lam "n" Tm.node)))
+        (lam "b" <| lam "m1" <| lam "div" <| lam "n" <|
+          let mval : Tm := Tm.node ◃ v "b" ◃ v "m1"
+          Tm.triage
+            Tm.node
+            (lam "_" Tm.node)
+            (lam "_" (lam "_"
+              (Tm.triage
+                Tm.node
+                (lam "_" (q tbin1))
+                (lam "_" (lam "_"
+                  (q tbSucc ◃ (v "div" ◃ (q tbRawSub ◃ mval ◃ v "n") ◃ v "n"))))
+                (q tbCmp ◃ mval ◃ v "n"))))
+            (v "n"))
+        (v "m")
+
+/-- Euclidean gcd on binary nats. `gcd 0 n = n`. -/
+def tbGcd (_ : Unit := ()) : Tree :=
+  Y2 <| Tm.compile <|
+    lam "m" <|
+      Tm.triage
+        (lam "gcd" (lam "n" (v "n")))
+        (lam "_" (lam "gcd" (lam "n" (v "n"))))
+        (lam "b" <| lam "m1" <| lam "gcd" <| lam "n" <|
+          let mval : Tm := Tm.node ◃ v "b" ◃ v "m1"
+          Tm.triage
+            mval
+            (lam "_" mval)
+            (lam "_" (lam "_"
+              (v "gcd" ◃ v "n" ◃ (q (tbMod ()) ◃ mval ◃ v "n"))))
+            (v "n"))
+        (v "m")
+
+def divBinV (a b : Value) : Value :=
+  match a.toBin?, b.toBin? with
+  | some m, some n => Value.ofBin (m / n)
+  | _, _ => .leaf
+
+def modBinV (a b : Value) : Value :=
+  match a.toBin?, b.toBin? with
+  | some m, some 0 => Value.ofBin m
+  | some m, some n => Value.ofBin (m % n)
+  | _, _ => .leaf
+
+def gcdBinV (a b : Value) : Value :=
+  match a.toBin?, b.toBin? with
+  | some m, some n => Value.ofBin (Nat.gcd m n)
+  | _, _ => .leaf
+
+theorem divBinV_ofBin (m n : Nat) :
+    divBinV (Value.ofBin m) (Value.ofBin n) = Value.ofBin (m / n) := by
+  simp [divBinV, Value.toBin_ofBin]
+
+theorem modBinV_ofBin (m n : Nat) :
+    modBinV (Value.ofBin m) (Value.ofBin n) =
+      Value.ofBin (if n = 0 then m else m % n) := by
+  cases n with
+  | zero => simp [modBinV, Value.toBin_ofBin]
+  | succ n => simp [modBinV, Value.toBin_ofBin]
+
+theorem gcdBinV_ofBin (m n : Nat) :
+    gcdBinV (Value.ofBin m) (Value.ofBin n) = Value.ofBin (Nat.gcd m n) := by
+  simp [gcdBinV, Value.toBin_ofBin]
+
 end Cas
