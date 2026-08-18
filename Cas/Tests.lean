@@ -93,6 +93,18 @@ namespace Cas.Tests
         | some n => n == (Value.ofNat 4).size
         | none => false)
 
+/-! ### Binary nats -/
+
+#guard (List.range 64).all (fun n => Value.toBin? (Value.ofBin n) == some n)
+#guard succBinV (Value.ofBin 7) == Value.ofBin 8
+#guard predBinV (Value.ofBin 8) == Value.ofBin 7
+#guard plusBinV (Value.ofBin 13) (Value.ofBin 21) == Value.ofBin 34
+#guard mulBinV (Value.ofBin 12) (Value.ofBin 13) == Value.ofBin 156
+#guard powBinV (Value.ofBin 2) (Value.ofBin 8) == Value.ofBin 256
+#guard tbSucc.isProgram && tbSucc.isClosed
+#guard tbPred.isProgram && tbPlus.isProgram
+#guard tbTimes.isProgram && tbPow.isProgram
+
 /-! ### Surface CAS -/
 
 #guard (parseExpr? "2+3").isSome
@@ -225,6 +237,17 @@ def programSelfTest : Option String :=
           if n == tsize.size then none
           else some s!"size size: got {n}, want {tsize.size}"
       | none => some "size size: diverged"
+    , if kernelBinSucc (Value.ofBin 15) == some 16 then none else some "bin succ 15"
+    , if kernelBinPred (Value.ofBin 16) == some 15 then none else some "bin pred 16"
+    , if kernelBinPred (Value.ofBin 0) == some 0 then none else some "bin pred 0"
+    , if kernelBinAdd (Value.ofBin 5) (Value.ofBin 7) == some 12 then none
+      else some "bin 5+7"
+    , if kernelBinAdd (Value.ofBin 13) (Value.ofBin 21) == some 34 then none
+      else some "bin 13+21"
+    , if kernelBinMul (Value.ofBin 6) (Value.ofBin 7) == some 42 then none
+      else some "bin 6*7"
+    , if kernelBinPow (Value.ofBin 2) (Value.ofBin 5) == some 32 then none
+      else some "bin 2^5"
     ]
 
 end Cas.Tests

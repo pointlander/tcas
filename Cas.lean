@@ -2,6 +2,7 @@ import Cas.Tree
 import Cas.Reduce
 import Cas.Bracket
 import Cas.Encode
+import Cas.Bin
 import Cas.Expr
 import Cas.Algebra
 import Cas.Diff

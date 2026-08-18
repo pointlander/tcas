@@ -139,20 +139,11 @@ def tag : Nat → Value
 def tagged (n : Nat) (payload : Value) : Value :=
   .fork (tag n) payload
 
-/-- Binary natural (LSB first). Used for compact character codes;
-    arithmetic nats stay unary so `plus`/`times` can walk stems. -/
-partial def ofNatBin : Nat → Value
-  | 0 => .leaf
-  | n + 1 =>
-      let m := n + 1
-      if m % 2 == 0 then .fork .leaf (ofNatBin (m / 2))
-      else .fork (.stem .leaf) (ofNatBin (m / 2))
+/-- Binary natural (LSB first). Character codes use this encoding;
+    unary stems remain the default for `tplus` / `ttimes`. -/
+def ofNatBin (n : Nat) : Value := Value.ofBin n
 
-partial def toNatBin? : Value → Option Nat
-  | .leaf => some 0
-  | .fork .leaf rest => (toNatBin? rest).map (· * 2)
-  | .fork (.stem .leaf) rest => (toNatBin? rest).map (fun k => k * 2 + 1)
-  | _ => none
+def toNatBin? (v : Value) : Option Nat := Value.toBin? v
 
 def encodeString (s : String) : Value :=
   Value.ofList (s.toList.map (fun c => ofNatBin c.toNat))

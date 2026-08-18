@@ -8,6 +8,7 @@
 -/
 
 import Cas.Encode
+import Cas.Bin
 import Cas.Expr
 import Cas.Algebra
 import Cas.Diff
@@ -62,6 +63,33 @@ def kernelEqual (a b : Value) (fuel : Nat := Value.defaultFuel) : Option Bool :=
 def kernelSize (a : Value) (fuel : Nat := Value.defaultFuel) : Option Nat :=
   match run1 tsize a fuel with
   | some v => v.toNat?
+  | none   => none
+
+/-- Binary-nat operations. -/
+def kernelBinSucc (a : Value) (fuel : Nat := Value.defaultFuel) : Option Nat :=
+  match run1 tbSucc a fuel with
+  | some v => v.toBin?
+  | none   => none
+
+def kernelBinPred (a : Value) (fuel : Nat := Value.defaultFuel) : Option Nat :=
+  match run1 tbPred a fuel with
+  | some v => v.toBin?
+  | none   => none
+
+def kernelBinAdd (a b : Value) (fuel : Nat := Value.defaultFuel) : Option Nat :=
+  match run2 tbPlus a b fuel with
+  | some v => v.toBin?
+  | none   => none
+
+def kernelBinMul (a b : Value) (fuel : Nat := Value.defaultFuel) : Option Nat :=
+  match run2 tbTimes a b fuel with
+  | some v => v.toBin?
+  | none   => none
+
+/-- `kernelBinPow b e` is `b^e`. -/
+def kernelBinPow (b e : Value) (fuel : Nat := Value.defaultFuel) : Option Nat :=
+  match run2 tbPow e b fuel with
+  | some v => v.toBin?
   | none   => none
 
 /-! ### Intensional analysis of encoded expressions
@@ -264,6 +292,11 @@ def isZeroProgram : Tree := tisZero
 def notProgram : Tree := tnot
 def equalProgram : Tree := tequal
 def sizeProgram : Tree := tsize
+def bsuccProgram : Tree := tbSucc
+def bpredProgram : Tree := tbPred
+def bplusProgram : Tree := tbPlus
+def btimesProgram : Tree := tbTimes
+def bpowProgram : Tree := tbPow
 def evalProgram : Tree := teval
 def diffProgram : Tree := tdiff
 
@@ -278,6 +311,7 @@ def describeKernel : String :=
    eval     Y2 + nested triage; plus/times/pow for arithmetic\n\
    diff     Y2 + nested triage; result is an encoded expression\n\
    equal    Y2 + nested triage on both arguments (intensional)\n\
-   size     Y2 + triage {1, λx. succ (size x), λx y. succ (size x + size y)}"
+   size     Y2 + triage {1, λx. succ (size x), λx y. succ (size x + size y)}\n\
+   binary   0 = △, 2k = △ △ k, 2k+1 = △ (△ △) k  (LSB first)"
 
 end Cas

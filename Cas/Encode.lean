@@ -205,6 +205,55 @@ def toInt? : Value → Option Int
       | none   => none
   | _ => none
 
+/-- Little-endian binary natural: `0 = △`, `2k = △ △ k`, `2k+1 = △ (△ △) k`.
+    Canonical form has no trailing `0` bits (so `0` is a leaf, never `△ △ △`). -/
+def ofBin (n : Nat) : Value :=
+  if n = 0 then .leaf
+  else if n % 2 = 0 then .fork .leaf (ofBin (n / 2))
+  else .fork (.stem .leaf) (ofBin (n / 2))
+termination_by n
+decreasing_by
+  all_goals
+    refine Nat.div_lt_self ?_ (by decide)
+    cases n with
+    | zero => contradiction
+    | succ _ => exact Nat.succ_pos _
+
+def toBin? : Value → Option Nat
+  | .leaf => some 0
+  | .fork .leaf r => (toBin? r).map (· * 2)
+  | .fork (.stem .leaf) r => (toBin? r).map (fun k => k * 2 + 1)
+  | _ => none
+
+theorem toBin_ofBin (n : Nat) : toBin? (ofBin n) = some n := by
+  induction n using Nat.strongRecOn with
+  | ind n ih =>
+      unfold ofBin
+      split
+      · next h0 =>
+          subst h0
+          simp [toBin?]
+      · next h0 =>
+          split
+          · next hev =>
+              have hlt : n / 2 < n :=
+                Nat.div_lt_self (Nat.pos_of_ne_zero h0) (by decide)
+              simp [toBin?, ih (n / 2) hlt]
+              have hmod : n % 2 = 0 := hev
+              have := Nat.div_add_mod n 2
+              simp [hmod] at this
+              omega
+          · next hod =>
+              have hlt : n / 2 < n :=
+                Nat.div_lt_self (Nat.pos_of_ne_zero h0) (by decide)
+              simp [toBin?, ih (n / 2) hlt]
+              have hmod : n % 2 = 1 := by
+                have : n % 2 < 2 := Nat.mod_lt n (by decide)
+                omega
+              have := Nat.div_add_mod n 2
+              simp [hmod] at this
+              omega
+
 /-- Structural (intensional) equality of values. The denotation of `tequal`. -/
 def equalV : Value → Value → Bool
   | .leaf, .leaf         => true
@@ -239,6 +288,7 @@ theorem equalV_eq (a b : Value) : equalV a b = true ↔ a = b := by
 end Value
 
 def encodeNat (n : Nat) : Tree := (Value.ofNat n).toTree
+def encodeBin (n : Nat) : Tree := (Value.ofBin n).toTree
 def encodeInt (i : Int) : Tree := (Value.ofInt i).toTree
 def encodeBool (b : Bool) : Tree := (Value.ofBool b).toTree
 

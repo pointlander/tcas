@@ -25,7 +25,11 @@ def usage : String :=
      cas kernel-diff <expr>  differentiate the encoded tree\n\
      cas equal <t1> <t2>     intensional equality of two tree programs\n\
      cas size <tree>         count nodes of a tree program\n\
-     cas show plus|times|pow|pred|not|equal|size|eval|diff\n\
+     cas bin + <n> <m>       binary-nat addition\n\
+     cas bin '*' <n> <m>     binary-nat multiplication\n\
+     cas bin '^' <n> <m>     binary-nat exponent (quote * and ^)\n\
+     cas bin succ|pred <n>   binary successor / predecessor\n\
+     cas show plus|times|pow|pred|not|equal|size|bplus|eval|diff\n\
                              print a kernel combinator\n\
    \n\
      expressions:  2*x^3 + sin(x) - 1/x\n\
@@ -140,6 +144,17 @@ def demo : IO Unit := do
   showSz "I" I
   showSz "3" (ofNat 3)
   IO.println ""
+  IO.println "8. Binary nats"
+  IO.println s!"   tbPlus   ({tbPlus.size} nodes, program {tbPlus.isProgram})"
+  IO.println s!"   tbTimes  ({tbTimes.size} nodes, program {tbTimes.isProgram})"
+  let showBin (label : String) (r : Option Nat) : IO Unit :=
+    match r with
+    | some n => IO.println s!"   {label}  ⇒  {n}"
+    | none   => IO.println s!"   {label}  ⇒  (diverged)"
+  showBin "13 + 21" (kernelBinAdd (Value.ofBin 13) (Value.ofBin 21))
+  showBin "6 * 7" (kernelBinMul (Value.ofBin 6) (Value.ofBin 7))
+  showBin "2 ^ 5" (kernelBinPow (Value.ofBin 2) (Value.ofBin 5))
+  IO.println ""
   let _ ← runProgramSelfTest
   IO.println ""
   IO.println describeKernel
@@ -152,6 +167,11 @@ def kernelNamed : String → Option Tree
   | "not"   => some notProgram
   | "equal" => some equalProgram
   | "size"  => some sizeProgram
+  | "bsucc" => some bsuccProgram
+  | "bpred" => some bpredProgram
+  | "bplus" => some bplusProgram
+  | "btimes" => some btimesProgram
+  | "bpow"  => some bpowProgram
   | "eval"  => some evalProgram
   | "diff"  => some diffProgram
   | "I"     => some I
@@ -299,6 +319,43 @@ def main (args : List String) : IO UInt32 := do
                       IO.println n
                       return 0
                   | none => fail "size exhausted the evaluation budget"
+  | "bin" :: "succ" :: s :: _ =>
+      match s.toNat? with
+      | none => fail "bin succ expects a natural"
+      | some n =>
+          match kernelBinSucc (Value.ofBin n) with
+          | some k =>
+              IO.println k
+              return 0
+          | none => fail "binary succ exhausted the evaluation budget"
+  | "bin" :: "pred" :: s :: _ =>
+      match s.toNat? with
+      | none => fail "bin pred expects a natural"
+      | some n =>
+          match kernelBinPred (Value.ofBin n) with
+          | some k =>
+              IO.println k
+              return 0
+          | none => fail "binary pred exhausted the evaluation budget"
+  | "bin" :: op :: sa :: sb :: _ =>
+      match sa.toNat?, sb.toNat? with
+      | some a, some b =>
+          let r :=
+            match op with
+            | "+" => kernelBinAdd (Value.ofBin a) (Value.ofBin b)
+            | "*" => kernelBinMul (Value.ofBin a) (Value.ofBin b)
+            | "^" => kernelBinPow (Value.ofBin a) (Value.ofBin b)
+            | _   => none
+          match r with
+          | some n =>
+              IO.println n
+              return 0
+          | none =>
+              if op == "+" || op == "*" || op == "^" then
+                fail "binary reduction diverged"
+              else
+                fail s!"unknown binary operator {op} (use + * ^ succ pred)"
+      | _, _ => fail "bin expects two natural numbers"
   | "arith" :: sa :: op :: sb :: _ =>
       let na := sa.toNat?
       let nb := sb.toNat?
