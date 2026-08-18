@@ -68,6 +68,13 @@ tequal ⬝ K ⬝ K  →*  true
 tequal ⬝ K ⬝ I  →*  false
 ```
 
+`tsize` is the matching generic query for node count:
+
+```
+tsize ⬝ △      →*  1
+tsize ⬝ tsize  →*  ⌜|tsize|⌝
+```
+
 `cas trace` walks the same call-by-value order as `eval`: the redex is
 always a program-fork applied to a program. Each line marks that redex
 in `[…]`, names the rule (`1` / `2` / `3a` / `3b` / `3c`), and prints
@@ -97,6 +104,8 @@ lake exe cas trace "S K K △"
 lake exe cas trace "K 3 7"
 lake exe cas equal K I
 lake exe cas equal "S K K" I
+lake exe cas size I
+lake exe cas size size
 lake exe cas kernel-eval "x^2+1" x=3
 lake exe cas kernel-diff "x^2 + sin(x)"
 lake exe cas test
@@ -118,7 +127,7 @@ and agrees with ordinary `Nat` evaluation (`evalPoly_natPoly`).
 Cas/Tree.lean       terms, K, S, I, triage
 Cas/Reduce.lean     the five rules, evaluator
 Cas/Bracket.lean    star abstraction, Y2
-Cas/Encode.lean     bool / nat / pair / list, plus, times, pow, equal
+Cas/Encode.lean     bool / nat / pair / list, plus, times, pow, equal, size
 Cas/Expr.lean       surface AST ↔ tree
 Cas/Algebra.lean    eval, subst, simplify, expand, collect
 Cas/Diff.lean       symbolic differentiation + lemmas

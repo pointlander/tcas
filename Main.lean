@@ -24,7 +24,8 @@ def usage : String :=
                              evaluate a nat-polynomial by tree reduction\n\
      cas kernel-diff <expr>  differentiate the encoded tree\n\
      cas equal <t1> <t2>     intensional equality of two tree programs\n\
-     cas show plus|times|pow|pred|not|equal|eval|diff\n\
+     cas size <tree>         count nodes of a tree program\n\
+     cas show plus|times|pow|pred|not|equal|size|eval|diff\n\
                              print a kernel combinator\n\
    \n\
      expressions:  2*x^3 + sin(x) - 1/x\n\
@@ -34,6 +35,7 @@ def runProgramSelfTest : IO Bool := do
   IO.println s!"   teval {teval.size} nodes (program {teval.isProgram})"
   IO.println s!"   tdiff {tdiff.size} nodes (program {tdiff.isProgram})"
   IO.println s!"   tequal {tequal.size} nodes (program {tequal.isProgram})"
+  IO.println s!"   tsize {tsize.size} nodes (program {tsize.isProgram})"
   match Cas.Tests.programSelfTest with
   | none =>
       IO.println "   program self-test: ok"
@@ -127,9 +129,39 @@ def demo : IO Unit := do
   showEq "3 3" (ofNat 3) (ofNat 3)
   showEq "3 4" (ofNat 3) (ofNat 4)
   IO.println ""
+  IO.println "7. Program size"
+  IO.println s!"   tsize  ({tsize.size} nodes, program {tsize.isProgram})"
+  let showSz (label : String) (t : Tree) : IO Unit := do
+    match kernelSize (eval! t) with
+    | some n => IO.println s!"   size {label}  ⇒  {n}"
+    | none   => IO.println s!"   size {label}  ⇒  (diverged)"
+  showSz "△" △
+  showSz "K" K
+  showSz "I" I
+  showSz "3" (ofNat 3)
+  IO.println ""
   let _ ← runProgramSelfTest
   IO.println ""
   IO.println describeKernel
+
+def kernelNamed : String → Option Tree
+  | "plus"  => some plusProgram
+  | "times" => some timesProgram
+  | "pow"   => some powProgram
+  | "pred"  => some predProgram
+  | "not"   => some notProgram
+  | "equal" => some equalProgram
+  | "size"  => some sizeProgram
+  | "eval"  => some evalProgram
+  | "diff"  => some diffProgram
+  | "I"     => some I
+  | "K"     => some K
+  | "S"     => some S
+  | _       => none
+
+/-- A kernel name (`size`, `I`, …) or a raw tree term. -/
+def parseTreeOrProg? (s : String) : Option Tree :=
+  kernelNamed s <|> parseTree? s
 
 def fail (msg : String) : IO UInt32 := do
   IO.eprintln msg
@@ -252,6 +284,21 @@ def main (args : List String) : IO UInt32 := do
           | none, _ => fail s!"cannot parse tree: {sa}"
           | _, none => fail s!"cannot parse tree: {sb}"
       | _ => fail "equal needs two tree terms"
+  | "size" :: rest =>
+      match rest with
+      | [] => fail "missing tree term"
+      | s :: _ =>
+          match parseTreeOrProg? s with
+          | none => fail s!"cannot parse tree: {s}"
+          | some t =>
+              match nf t with
+              | none => fail "size expects a closed program"
+              | some v =>
+                  match kernelSize (eval! v) with
+                  | some n =>
+                      IO.println n
+                      return 0
+                  | none => fail "size exhausted the evaluation budget"
   | "arith" :: sa :: op :: sb :: _ =>
       let na := sa.toNat?
       let nb := sb.toNat?
@@ -303,21 +350,7 @@ def main (args : List String) : IO UInt32 := do
           | some d => printResult (Expr.simplify d)
           | none   => fail "kernel-diff could not analyse the encoded tree"
   | "show" :: kind :: _ =>
-      let t :=
-        match kind with
-        | "plus"  => some plusProgram
-        | "times" => some timesProgram
-        | "pow"   => some powProgram
-        | "pred"  => some predProgram
-        | "not"   => some notProgram
-        | "equal" => some equalProgram
-        | "eval"  => some evalProgram
-        | "diff"  => some diffProgram
-        | "I"     => some I
-        | "K"     => some K
-        | "S"     => some S
-        | _       => none
-      match t with
+      match kernelNamed kind with
       | some t =>
           IO.println s!"{kind}  ({t.size} nodes)"
           IO.println t

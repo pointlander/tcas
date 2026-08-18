@@ -58,6 +58,12 @@ def kernelEqual (a b : Value) (fuel : Nat := Value.defaultFuel) : Option Bool :=
   | some v => v.toBool?
   | none   => none
 
+/-- Size of a program, as a unary nat. -/
+def kernelSize (a : Value) (fuel : Nat := Value.defaultFuel) : Option Nat :=
+  match run1 tsize a fuel with
+  | some v => v.toNat?
+  | none   => none
+
 /-! ### Intensional analysis of encoded expressions
 
   A fork `△ tag payload` is an expression constructor. Nested stems on
@@ -257,6 +263,7 @@ def predProgram : Tree := tpred
 def isZeroProgram : Tree := tisZero
 def notProgram : Tree := tnot
 def equalProgram : Tree := tequal
+def sizeProgram : Tree := tsize
 def evalProgram : Tree := teval
 def diffProgram : Tree := tdiff
 
@@ -270,6 +277,7 @@ def describeKernel : String :=
    expr     △ ⟨ctor⟩ ⟨payload⟩   ctor = stem-chain index\n\
    eval     Y2 + nested triage; plus/times/pow for arithmetic\n\
    diff     Y2 + nested triage; result is an encoded expression\n\
-   equal    Y2 + nested triage on both arguments (intensional)"
+   equal    Y2 + nested triage on both arguments (intensional)\n\
+   size     Y2 + triage {1, λx. succ (size x), λx y. succ (size x + size y)}"
 
 end Cas

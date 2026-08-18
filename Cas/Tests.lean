@@ -78,6 +78,21 @@ namespace Cas.Tests
         | some b => b == true
         | none => false)
 
+/-! ### Program size -/
+
+#guard tsize.isProgram
+#guard tsize.isClosed
+#guard (eval! (tsize ⬝ △)).toNat? == some 1
+#guard (eval! (tsize ⬝ K)).toNat? == some K.size
+#guard (eval! (tsize ⬝ I)).toNat? == some I.size
+#guard (eval! (tsize ⬝ S)).toNat? == some S.size
+#guard (eval! (tsize ⬝ ofNat 5)).toNat? == some (ofNat 5).size
+#guard (eval! (tsize ⬝ (△ ⬝ ofNat 2 ⬝ ofNat 3))).toNat?
+        == some (△ ⬝ ofNat 2 ⬝ ofNat 3).size
+#guard (match kernelSize (Value.ofNat 4) with
+        | some n => n == (Value.ofNat 4).size
+        | none => false)
+
 /-! ### Surface CAS -/
 
 #guard (parseExpr? "2+3").isSome
@@ -205,6 +220,11 @@ def programSelfTest : Option String :=
       if kernelEqual eqv eqv == some true then none else some "equal equal equal"
     , if kernelEqual (eval! tequal) (eval! tnot) == some false then none
       else some "equal equal not"
+    , match kernelSize (eval! tsize) with
+      | some n =>
+          if n == tsize.size then none
+          else some s!"size size: got {n}, want {tsize.size}"
+      | none => some "size size: diverged"
     ]
 
 end Cas.Tests

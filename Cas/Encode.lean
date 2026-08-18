@@ -119,6 +119,26 @@ def tplus : Tree :=
 @[inherit_doc tplus]
 def tplusDirect : Tree := tplus
 
+/--
+  Size of a program (Jay).
+
+  `Y2 (λx sz. triage {leaf, stem, fork} x)` with
+
+    leaf:  1
+    stem:  λx₁ sz. succ (sz x₁)
+    fork:  λx₁ x₂ sz. succ (plus (sz x₁) (sz x₂))
+
+  Dispatch on `x` happens before the recursor is applied.
+-/
+def tsize : Tree :=
+  Y2 (star "x" (
+    triage
+      (star "sz" (△ ⬝ △))
+      (star "x1" (star "sz" (△ ⬝ (.ref "sz" ⬝ .ref "x1"))))
+      (star "x1" (star "x2" (star "sz" (
+        △ ⬝ (tplus ⬝ (.ref "sz" ⬝ .ref "x1") ⬝ (.ref "sz" ⬝ .ref "x2"))))))
+      ⬝ .ref "x"))
+
 /-- `times = Y2 (λn times m. triage { 0, λn₁. plus m (times n₁ m), λ_ _. 0 } n)` -/
 def ttimes : Tree :=
   Y2 (star "n" (star "times" (star "m"
