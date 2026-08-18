@@ -16,6 +16,7 @@ import Cas.Algebra
 import Cas.Diff
 import Cas.Bracket
 import Cas.Program
+import Cas.Simp
 
 namespace Cas
 
@@ -376,10 +377,32 @@ partial def walkDiff : Value → Option Value
 def kernelDiff (e : Value) (fuel : Nat := Value.defaultFuel) : Option Value :=
   run1 tdiff e fuel
 
-def kernelDiffExpr (e : Expr) : Option Expr :=
-  match kernelDiff (Expr.encode e) with
+/-- Reduce `tsimp ⬝ e` (one bottom-up rewrite pass). -/
+def kernelSimp (e : Value) (fuel : Nat := Value.defaultFuel) : Option Value :=
+  run1 (tsimp ()) e fuel
+
+/-- Iterate `tsimp` until a fixpoint or `fuel` passes. -/
+def kernelSimpN (e : Value) (fuel : Nat := 8) : Option Value :=
+  match fuel with
+  | 0 => some e
+  | n + 1 =>
+      match kernelSimp e with
+      | none => none
+      | some e' =>
+          if e' == e then some e else kernelSimpN e' n
+
+def kernelSimpExpr (e : Expr) : Option Expr :=
+  match kernelSimpN (Expr.encode e) with
   | some v => Expr.decode v
   | none   => none
+
+def kernelDiffExpr (e : Expr) : Option Expr :=
+  match kernelDiff (Expr.encode e) with
+  | some v =>
+      match kernelSimpN v with
+      | some v' => Expr.decode v'
+      | none    => Expr.decode v
+  | none => none
 
 /-! ### A self-contained tree program for `plus` on encoded nats
 
@@ -416,6 +439,7 @@ def rtimesProgram (_ : Unit := ()) : Tree := trTimes ()
 def rdivProgram (_ : Unit := ()) : Tree := trDiv ()
 def evalProgram : Unit → Tree := fun _ => teval ()
 def diffProgram : Tree := tdiff
+def simpProgram (_ : Unit := ()) : Tree := tsimp ()
 
 def describeKernel : String :=
   "tree-calculus kernel\n\
@@ -427,6 +451,7 @@ def describeKernel : String :=
    expr     △ ⟨ctor⟩ ⟨payload⟩   ctor = stem-chain index\n\
    eval     Y2 + nested triage; plus/times/pow for arithmetic\n\
    diff     Y2 + nested triage; result is an encoded expression\n\
+   simp     Y2 + nested triage; one bottom-up rewrite pass\n\
    equal    Y2 + nested triage on both arguments (intensional)\n\
    size     Y2 + triage {1, λx. succ (size x), λx y. succ (size x + size y)}\n\
    binary   0 = △, 2k = △ △ k, 2k+1 = △ (△ △) k  (LSB first)\n\

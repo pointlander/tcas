@@ -220,6 +220,7 @@ private def traceDone (t v : Tree) : Bool :=
 #guard (eval! (Tm.compile (Tm.lam "x" (Tm.embed I ◃ Tm.v "x")) ⬝ △)).toTree == △
 #guard (teval ()).size > 0
 #guard tdiff.size > 0
+#guard (tsimp ()).isProgram && (tsimp ()).isClosed
 
 /-- Runtime checks for `teval` / `tdiff`. Returns `none` on success. -/
 def programSelfTest (_ : Unit := ()) : Option String :=
@@ -231,7 +232,14 @@ def programSelfTest (_ : Unit := ()) : Option String :=
     match parseExpr? s with
     | some e =>
         match kernelDiffExpr e with
-        | some d => some (Expr.simplify d).toString
+        | some d => some d.toString
+        | none   => some "<diverged>"
+    | none => some "<parse>"
+  let ks (s : String) : Option String :=
+    match parseExpr? s with
+    | some e =>
+        match kernelSimpExpr e with
+        | some d => some d.toString
         | none   => some "<diverged>"
     | none => some "<parse>"
   let expect (name : String) (got want : Option String) : Option String :=
@@ -267,6 +275,12 @@ def programSelfTest (_ : Unit := ()) : Option String :=
     , expect "tdiff cos(x)" (kd "cos(x)") (some "-sin(x)")
     , expect "tdiff exp(x)" (kd "exp(x)") (some "exp(x)")
     , expect "tdiff ln(x)" (kd "ln(x)") (some "1 / x")
+    , expect "tsimp 0+x" (ks "0+x") (some "x")
+    , expect "tsimp x*1" (ks "x*1") (some "x")
+    , expect "tsimp x^1" (ks "x^1") (some "x")
+    , expect "tsimp --x" (ks "--x") (some "x")
+    , expect "tsimp x-x" (ks "x-x") (some "0")
+    , expect "tsimp 2+3" (ks "2+3") (some "5")
     , if ev "(x+1)*(x+2)" 3 == some 20 then none else some "teval (x+1)*(x+2) @ 3"
     , let eqv := eval! tequal
       if kernelEqual eqv eqv == some true then none else some "equal equal equal"

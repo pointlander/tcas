@@ -50,9 +50,10 @@ transcendentals, with parse / pretty-print, substitution, constant
 folding, expansion, like-term collection, and symbolic differentiation.
 
 **Kernel** (`Cas.Program`, `Cas.Kernel`) — the same expressions as
-trees (`△ ⟨ctor⟩ ⟨payload⟩`). `teval` and `tdiff` are `Y2` programs:
-a `triage` dispatch inspects the constructor *before* the recursor is
-applied, then `plus` / `times` / `pow` do the arithmetic.
+trees (`△ ⟨ctor⟩ ⟨payload⟩`). `teval`, `tdiff` and `tsimp` are `Y2`
+programs: a `triage` dispatch inspects the constructor *before* the
+recursor is applied, then `plus` / `times` / `pow` do the arithmetic
+and `tsimp` rewrites the encoded tree.
 
 ```
 teval ⬝ ⌜x^2+1⌝ ⬝ ⌜3⌝  →*  ⌜10⌝
@@ -97,6 +98,7 @@ teval ⬝ ⌜x-1⌝ ⬝ ⌜4⌝     →*  ⌜3⌝
 teval ⬝ ⌜1-x⌝ ⬝ ⌜4⌝     →*  ⌜-3⌝
 teval ⬝ ⌜1/2+1/3⌝       →*  ⌜5/6⌝
 teval ⬝ ⌜1/x⌝ ⬝ ⌜4⌝     →*  ⌜1/4⌝
+tsimp ⬝ ⌜2 * x^1 * 1⌝    →*  ⌜2x⌝
 ```
 
 `cas trace` walks the same call-by-value order as `eval`: the redex is
@@ -143,6 +145,7 @@ lake exe cas kernel-eval "x^2+1" x=3
 lake exe cas kernel-eval "1/2+1/3" x=0
 lake exe cas kernel-eval "1/x" x=4
 lake exe cas kernel-diff "x^2 + sin(x)"
+lake exe cas kernel-simp "2*x^1*1"
 lake exe cas test
 ```
 
@@ -172,6 +175,7 @@ Cas/Algebra.lean    eval, subst, simplify, expand, collect
 Cas/Diff.lean       symbolic differentiation + lemmas
 Cas/Parse.lean      expression and tree parsers
 Cas/Program.lean    teval / tdiff as Y2 + triage programs
+Cas/Simp.lean       tsimp, one bottom-up rewrite pass
 Cas/Kernel.lean     run those programs; Lean walkers as spec
 Cas/Semantics.lean  fuelled evaluator lemmas (K, I, wait, values)
 Cas/Arith.lean      plus/times/pow denotation, uniqueness, pred/isZero
