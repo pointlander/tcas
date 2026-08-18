@@ -217,21 +217,6 @@ partial def toList? : Value → Option (List Value)
       | none    => none
   | .stem _   => none
 
-/-- Sign-magnitude integer. Non-negative: `△ 0 n`. Negative: `△ (△ △) n`. -/
-def ofInt : Int → Value
-  | .ofNat n   => .fork .leaf (ofNat n)
-  | .negSucc n => .fork (.stem .leaf) (ofNat (n + 1))
-
-def toInt? : Value → Option Int
-  | .fork .leaf n =>
-      (toNat? n).map (fun k => Int.ofNat k)
-  | .fork (.stem .leaf) n =>
-      match toNat? n with
-      | some 0 => some 0
-      | some k => some (Int.negOfNat k)
-      | none   => none
-  | _ => none
-
 /-- Little-endian binary natural: `0 = △`, `2k = △ △ k`, `2k+1 = △ (△ △) k`.
     Canonical form has no trailing `0` bits (so `0` is a leaf, never `△ △ △`). -/
 def ofBin (n : Nat) : Value :=
@@ -280,6 +265,22 @@ theorem toBin_ofBin (n : Nat) : toBin? (ofBin n) = some n := by
               have := Nat.div_add_mod n 2
               simp [hmod] at this
               omega
+
+/-- Sign-magnitude integer. Magnitude is a binary nat (`ofBin`).
+    Non-negative: `△ △ n`. Negative: `△ (△ △) n`. -/
+def ofInt : Int → Value
+  | .ofNat n   => .fork .leaf (ofBin n)
+  | .negSucc n => .fork (.stem .leaf) (ofBin (n + 1))
+
+def toInt? : Value → Option Int
+  | .fork .leaf n =>
+      (toBin? n).map (fun k => Int.ofNat k)
+  | .fork (.stem .leaf) n =>
+      match toBin? n with
+      | some 0 => some 0
+      | some k => some (Int.negOfNat k)
+      | none   => none
+  | _ => none
 
 /-- Structural (intensional) equality of values. The denotation of `tequal`. -/
 def equalV : Value → Value → Bool

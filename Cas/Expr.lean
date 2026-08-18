@@ -139,8 +139,8 @@ def tag : Nat → Value
 def tagged (n : Nat) (payload : Value) : Value :=
   .fork (tag n) payload
 
-/-- Binary natural (LSB first). Character codes use this encoding;
-    unary stems remain the default for `tplus` / `ttimes`. -/
+/-- Binary natural (LSB first). Used for character codes and for
+    the magnitude of kernel integers. -/
 def ofNatBin (n : Nat) : Value := Value.ofBin n
 
 def toNatBin? (v : Value) : Option Nat := Value.toBin? v

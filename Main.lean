@@ -191,6 +191,7 @@ def kernelNamed : String → Option Tree
   | "bplus" => some bplusProgram
   | "btimes" => some btimesProgram
   | "bpow"  => some bpowProgram
+  | "bminus" => some bminusProgram
   | "eval"  => some evalProgram
   | "diff"  => some diffProgram
   | "I"     => some I

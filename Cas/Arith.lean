@@ -6,11 +6,12 @@
   same recurrences computes `Nat` addition, multiplication and
   exponentiation. Predecessor and zero-test are proved by unfolding the
   small `triage` programs. `evalPoly` is the denotation of kernel
-  evaluation on encoded nat-polynomials.
+  evaluation on encoded nat-polynomials, now using binary magnitudes.
 -/
 
 import Cas.Semantics
 import Cas.Encode
+import Cas.Bin
 import Cas.Expr
 import Cas.Kernel
 
@@ -231,7 +232,7 @@ inductive NatPoly : Expr → Prop where
   | mul {a b} : NatPoly a → NatPoly b → NatPoly (.mul a b)
   | pow {a b} : NatPoly a → NatPoly b → NatPoly (.pow a b)
 
-/-- Denotational evaluation using `plusV` / `mulV` / `powV`. -/
+/-- Denotational evaluation using `plusBinV` / `mulBinV` / `powBinV`. -/
 def evalPoly (x : Value) : Value → Option Value
   | .fork tag payload =>
       match tag.toNat? with
@@ -244,28 +245,28 @@ def evalPoly (x : Value) : Value → Option Value
           match payload with
           | .fork a b =>
               match evalPoly x a, evalPoly x b with
-              | some va, some vb => some (plusV va vb)
+              | some va, some vb => some (plusBinV va vb)
               | _, _ => none
           | _ => none
       | some 3 =>
           match payload with
           | .fork a b =>
               match evalPoly x a, evalPoly x b with
-              | some va, some vb => some (mulV va vb)
+              | some va, some vb => some (mulBinV va vb)
               | _, _ => none
           | _ => none
       | some 4 =>
           match payload with
           | .fork a b =>
               match evalPoly x a, evalPoly x b with
-              | some va, some vb => some (powV va vb)
+              | some va, some vb => some (powBinV va vb)
               | _, _ => none
           | _ => none
       | _ => none
   | _ => none
 
 theorem evalPoly_const (x : Value) (n : Nat) :
-    evalPoly x (Expr.encode (.const (Int.ofNat n))) = some (Value.ofNat n) := by
+    evalPoly x (Expr.encode (.const (Int.ofNat n))) = some (Value.ofBin n) := by
   unfold Expr.encode Expr.tagged
   unfold evalPoly
   simp [Expr.tag, Value.ofInt, Value.toNat?]
@@ -279,7 +280,7 @@ theorem evalPoly_var (x : Value) (s : String) :
 theorem evalPoly_add (x : Value) (a b : Expr) {va vb : Value}
     (ha : evalPoly x (Expr.encode a) = some va)
     (hb : evalPoly x (Expr.encode b) = some vb) :
-    evalPoly x (Expr.encode (.add a b)) = some (plusV va vb) := by
+    evalPoly x (Expr.encode (.add a b)) = some (plusBinV va vb) := by
   unfold Expr.encode Expr.tagged
   unfold evalPoly
   simp [Expr.tag, Value.toNat?, ha, hb]
@@ -287,7 +288,7 @@ theorem evalPoly_add (x : Value) (a b : Expr) {va vb : Value}
 theorem evalPoly_mul (x : Value) (a b : Expr) {va vb : Value}
     (ha : evalPoly x (Expr.encode a) = some va)
     (hb : evalPoly x (Expr.encode b) = some vb) :
-    evalPoly x (Expr.encode (.mul a b)) = some (mulV va vb) := by
+    evalPoly x (Expr.encode (.mul a b)) = some (mulBinV va vb) := by
   unfold Expr.encode Expr.tagged
   unfold evalPoly
   simp [Expr.tag, Value.toNat?, ha, hb]
@@ -295,7 +296,7 @@ theorem evalPoly_mul (x : Value) (a b : Expr) {va vb : Value}
 theorem evalPoly_pow (x : Value) (a b : Expr) {va vb : Value}
     (ha : evalPoly x (Expr.encode a) = some va)
     (hb : evalPoly x (Expr.encode b) = some vb) :
-    evalPoly x (Expr.encode (.pow a b)) = some (powV va vb) := by
+    evalPoly x (Expr.encode (.pow a b)) = some (powBinV va vb) := by
   unfold Expr.encode Expr.tagged
   unfold evalPoly
   simp [Expr.tag, Value.toNat?, ha, hb]
@@ -320,12 +321,12 @@ def evalNatAt (n : Nat) : Expr → Option Nat
 
 theorem evalPoly_natPoly (e : Expr) (n : Nat) (h : NatPoly e) :
     ∃ k, evalNatAt n e = some k ∧
-      evalPoly (Value.ofNat n) (Expr.encode e) = some (Value.ofNat k) := by
+      evalPoly (Value.ofBin n) (Expr.encode e) = some (Value.ofBin k) := by
   induction h with
   | const k =>
       refine ⟨k, ?_, ?_⟩
       · simp [evalNatAt]
-      · simpa using evalPoly_const (Value.ofNat n) k
+      · simpa using evalPoly_const (Value.ofBin n) k
   | var s =>
       refine ⟨n, rfl, evalPoly_var _ s⟩
   | @add a b _ _ iha ihb =>
@@ -333,18 +334,18 @@ theorem evalPoly_natPoly (e : Expr) (n : Nat) (h : NatPoly e) :
       obtain ⟨kb, hb1, hb2⟩ := ihb
       refine ⟨ka + kb, ?_, ?_⟩
       · simp [evalNatAt, ha1, hb1]
-      · simpa [plusV_ofNat] using evalPoly_add (Value.ofNat n) a b ha2 hb2
+      · simpa [plusBinV_ofBin] using evalPoly_add (Value.ofBin n) a b ha2 hb2
   | @mul a b _ _ iha ihb =>
       obtain ⟨ka, ha1, ha2⟩ := iha
       obtain ⟨kb, hb1, hb2⟩ := ihb
       refine ⟨ka * kb, ?_, ?_⟩
       · simp [evalNatAt, ha1, hb1]
-      · simpa [mulV_ofNat] using evalPoly_mul (Value.ofNat n) a b ha2 hb2
+      · simpa [mulBinV_ofBin] using evalPoly_mul (Value.ofBin n) a b ha2 hb2
   | @pow a b _ _ iha ihb =>
       obtain ⟨ka, ha1, ha2⟩ := iha
       obtain ⟨kb, hb1, hb2⟩ := ihb
       refine ⟨ka ^ kb, ?_, ?_⟩
       · simp [evalNatAt, ha1, hb1]
-      · simpa [powV_ofNat] using evalPoly_pow (Value.ofNat n) a b ha2 hb2
+      · simpa [powBinV_ofBin] using evalPoly_pow (Value.ofBin n) a b ha2 hb2
 
 end Cas

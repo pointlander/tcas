@@ -432,4 +432,82 @@ def tbPow : Tree :=
             (v "bit"))
         (v "e")
 
+/-- Three-way compare on binary nats: `△` = LT, `△ △` = EQ, `△ △ △` = GT. -/
+def tbCmp : Tree :=
+  Y2 <| Tm.compile <|
+    lam "m" <|
+      Tm.triage
+        (lam "cmp" <| lam "n" <|
+          Tm.triage (q ttrue) (lam "_" Tm.node) (lam "_" (lam "_" Tm.node)) (v "n"))
+        (lam "_" (lam "cmp" (lam "n" (q ttrue))))
+        (lam "b1" <| lam "m1" <| lam "cmp" <| lam "n" <|
+          Tm.triage
+            (q (△ ⬝ △ ⬝ △))
+            (lam "_" (q (△ ⬝ △ ⬝ △)))
+            (lam "b2" <| lam "n1" <|
+              Tm.triage
+                Tm.node
+                (lam "_"
+                  (Tm.triage
+                    (Tm.triage (q ttrue) (lam "_" Tm.node)
+                      (lam "_" (lam "_" (q ttrue))) (v "b2"))
+                    (lam "_"
+                      (Tm.triage (q (△ ⬝ △ ⬝ △)) (lam "_" (q ttrue))
+                        (lam "_" (lam "_" (q (△ ⬝ △ ⬝ △)))) (v "b2")))
+                    (lam "_" (lam "_" (q ttrue)))
+                    (v "b1")))
+                (lam "_" (lam "_" (q (△ ⬝ △ ⬝ △))))
+                (v "cmp" ◃ v "m1" ◃ v "n1"))
+            (v "n"))
+        (v "m")
+
+/-- Subtract binary nats, assuming `m ≥ n`. -/
+def tbRawSub : Tree :=
+  Y2 <| Tm.compile <|
+    lam "m" <|
+      Tm.triage
+        (lam "sub" (lam "n" Tm.node))
+        (lam "_" (lam "sub" (lam "n" Tm.node)))
+        (lam "b1" <| lam "m1" <| lam "sub" <| lam "n" <|
+          Tm.triage
+            (Tm.node ◃ v "b1" ◃ v "m1")
+            (lam "_" (Tm.node ◃ v "b1" ◃ v "m1"))
+            (lam "b2" <| lam "n1" <|
+              let d : Tm := v "sub" ◃ v "m1" ◃ v "n1"
+              Tm.triage
+                (Tm.triage
+                  (q tbCons0 ◃ d)
+                  (lam "_" (q tbCons1 ◃ (q tbPred ◃ d)))
+                  (lam "_" (lam "_" (q tbCons0 ◃ d)))
+                  (v "b2"))
+                (lam "_"
+                  (Tm.triage
+                    (q tbCons1 ◃ d)
+                    (lam "_" (q tbCons0 ◃ d))
+                    (lam "_" (lam "_" (q tbCons1 ◃ d)))
+                    (v "b2")))
+                (lam "_" (lam "_" (q tbCons0 ◃ d)))
+                (v "b1"))
+            (v "n"))
+        (v "m")
+
+/-- Saturating binary subtraction. -/
+def tbMinus : Tree :=
+  Tm.compile <|
+    lam "m" <| lam "n" <|
+      Tm.triage
+        Tm.node
+        (lam "_" Tm.node)
+        (lam "_" (lam "_" (q tbRawSub ◃ v "m" ◃ v "n")))
+        (q tbCmp ◃ v "m" ◃ v "n")
+
+def minusBinV (a b : Value) : Value :=
+  match a.toBin?, b.toBin? with
+  | some m, some n => Value.ofBin (m - n)
+  | _, _ => .leaf
+
+theorem minusBinV_ofBin (m n : Nat) :
+    minusBinV (Value.ofBin m) (Value.ofBin n) = Value.ofBin (m - n) := by
+  simp [minusBinV, Value.toBin_ofBin]
+
 end Cas

@@ -112,6 +112,8 @@ namespace Cas.Tests
 #guard tbSucc.isProgram && tbSucc.isClosed
 #guard tbPred.isProgram && tbPlus.isProgram
 #guard tbTimes.isProgram && tbPow.isProgram
+#guard tbCmp.isProgram && tbMinus.isProgram
+#guard minusBinV (Value.ofBin 5) (Value.ofBin 3) == Value.ofBin 2
 
 /-! ### Surface CAS -/
 
@@ -261,6 +263,10 @@ def programSelfTest : Option String :=
       else some "bin 6*7"
     , if kernelBinPow (Value.ofBin 2) (Value.ofBin 5) == some 32 then none
       else some "bin 2^5"
+    , if kernelBinSub (Value.ofBin 10) (Value.ofBin 3) == some 7 then none
+      else some "bin 10-3"
+    , if kernelBinSub (Value.ofBin 3) (Value.ofBin 10) == some 0 then none
+      else some "bin 3-10"
     , match kernelMinus (Value.ofNat 5) (Value.ofNat 3) with
       | some v => if v.toNat? == some 2 then none else some "minus 5 3"
       | none => some "minus 5 3: diverged"

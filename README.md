@@ -84,12 +84,12 @@ Binary nats (`Value.ofBin`) store bits LSB-first, so plus and times walk
 2k + 1 = △ (△ △) k
 ```
 
-`tbPlus`, `tbTimes` and `tbPow` are `Y2` programs on that encoding.
-Unary `tplus` / `ttimes` remain for the kernel evaluator.
+`tbPlus`, `tbTimes`, `tbMinus` and `tbPow` are `Y2` programs on that
+encoding.
 
 Signed integers are sign-magnitude (`+n = △ △ n`, `−n = △ (△ △) n`)
-with unary magnitude. `tiPlus` / `tiMinus` / `tiNeg` / `tiTimes` are
-tree programs, so the kernel can evaluate `x-1` and `1-x`:
+with a **binary** magnitude. Kernel eval and diff use that encoding, so
+`tiPlus` / `tdiff` walk bits rather than stems:
 
 ```
 teval ⬝ ⌜x-1⌝ ⬝ ⌜4⌝  →*  ⌜3⌝

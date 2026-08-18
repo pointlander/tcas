@@ -93,6 +93,11 @@ def kernelBinPow (b e : Value) (fuel : Nat := Value.defaultFuel) : Option Nat :=
   | some v => v.toBin?
   | none   => none
 
+def kernelBinSub (a b : Value) (fuel : Nat := Value.defaultFuel) : Option Nat :=
+  match run2 tbMinus a b fuel with
+  | some v => v.toBin?
+  | none   => none
+
 /-! ### Intensional analysis of encoded expressions
 
   A fork `△ tag payload` is an expression constructor. Nested stems on
@@ -125,7 +130,7 @@ partial def walkEval (x : Value) (e : Value) : Option Value :=
           -- const: payload is already an `ofInt`
           some payload
       | some 1 =>
-          -- var: pack the unary input as `+x`
+          -- var: pack the binary input as `+x`
           some (.fork .leaf x)
       | some 2 =>
           match payload with
@@ -175,7 +180,7 @@ def kernelEval (x e : Value) (fuel : Nat := Value.defaultFuel) : Option Value :=
   run2 teval e x fuel
 
 def kernelEvalInt (x : Nat) (e : Expr) : Option Int :=
-  match kernelEval (Value.ofNat x) (Expr.encode e) with
+  match kernelEval (Value.ofBin x) (Expr.encode e) with
   | some v => v.toInt?
   | none   => none
 
@@ -238,7 +243,7 @@ partial def walkDiff : Value → Option Value
                   | some 0 =>
                       match bp with
                       | .fork .leaf mag =>
-                          match mag.toNat?, walkDiff a with
+                          match mag.toBin?, walkDiff a with
                           | some n, some da =>
                               let nE   := Expr.encode (.const (Int.ofNat n))
                               let nm1  := Expr.encode (.const (Int.ofNat (n - 1)))
@@ -330,6 +335,7 @@ def bpredProgram : Tree := tbPred
 def bplusProgram : Tree := tbPlus
 def btimesProgram : Tree := tbTimes
 def bpowProgram : Tree := tbPow
+def bminusProgram : Tree := tbMinus
 def minusProgram : Tree := tminus
 def inegProgram : Tree := tiNeg
 def iplusProgram : Tree := tiPlus
@@ -351,6 +357,6 @@ def describeKernel : String :=
    equal    Y2 + nested triage on both arguments (intensional)\n\
    size     Y2 + triage {1, λx. succ (size x), λx y. succ (size x + size y)}\n\
    binary   0 = △, 2k = △ △ k, 2k+1 = △ (△ △) k  (LSB first)\n\
-   int      +n = △ △ n, −n = △ (△ △) n; plus / minus / times"
+   int      +n = △ △ ⌜n⌝₂, −n = △ (△ △) ⌜n⌝₂   (binary magnitude)"
 
 end Cas

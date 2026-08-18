@@ -6,12 +6,13 @@
     +n = △ △ n     (fork leaf mag)
     -n = △ (△ △) n (fork true mag)
 
-  Magnitude is a unary nat, matching `Expr.encode` of constants.
-  Zero is always `+0`. `minus` on nats is saturating; signed plus
-  subtracts magnitudes only when they differ in sign.
+  Magnitude is a binary nat (`ofBin`). Zero is always `+0`.
+  `minus` on nats is saturating; signed plus subtracts magnitudes
+  only when they differ in sign.
 -/
 
 import Cas.Encode
+import Cas.Bin
 
 namespace Cas
 
@@ -22,12 +23,12 @@ def tint0 : Tree := △ ⬝ △ ⬝ △
 def tflipSign : Tree :=
   triage ttrue (K ⬝ tfalse) (K ⬝ (K ⬝ tfalse))
 
-/-- Pack `△ s m`, collapsing a zero magnitude to `+0`. -/
+/-- Pack `△ s m`. Binary `0` is a leaf; any fork is a nonzero magnitude. -/
 def tmkInt : Tree :=
   star "s" (star "m" (
     triage tint0
-      (star "_" (△ ⬝ .ref "s" ⬝ .ref "m"))
-      (star "_" (star "_" tint0))
+      (star "_" tint0)
+      (star "_" (star "_" (△ ⬝ .ref "s" ⬝ .ref "m")))
       ⬝ .ref "m"))
 
 /-- Integer negation. -/
@@ -62,14 +63,14 @@ def tiPlus : Tree :=
               Tm.triage
                 -- `false = △` (leaf): different signs → subtract magnitudes
                 (Tm.triage
-                  (q tmkInt ◃ v "s2" ◃ (q tminus ◃ v "m2" ◃ v "m1"))
+                  (q tmkInt ◃ v "s2" ◃ (q tbMinus ◃ v "m2" ◃ v "m1"))
                   (lam "_" (q tint0))
                   (lam "_" (lam "_"
-                    (q tmkInt ◃ v "s1" ◃ (q tminus ◃ v "m1" ◃ v "m2"))))
-                  (q tcmp ◃ v "m1" ◃ v "m2"))
+                    (q tmkInt ◃ v "s1" ◃ (q tbMinus ◃ v "m1" ◃ v "m2"))))
+                  (q tbCmp ◃ v "m1" ◃ v "m2"))
                 -- `true = △ △` (stem): same sign → add magnitudes
                 (lam "_"
-                  (q tmkInt ◃ v "s1" ◃ (q tplus ◃ v "m1" ◃ v "m2")))
+                  (q tmkInt ◃ v "s1" ◃ (q tbPlus ◃ v "m1" ◃ v "m2")))
                 (lam "_" (lam "_" (q tint0)))
                 (sameSignTm (v "s1") (v "s2")))
             (v "b"))
@@ -96,7 +97,7 @@ def tiTimes : Tree :=
           Tm.triage (q tint0) (lam "_" (q tint0))
             (lam "s2" <| lam "m2" <|
               q tmkInt ◃ xorSignTm (v "s1") (v "s2") ◃
-                (q ttimes ◃ v "m1" ◃ v "m2"))
+                (q tbTimes ◃ v "m1" ◃ v "m2"))
             (v "b"))
         (v "a")
 
@@ -105,9 +106,9 @@ def tiTimes : Tree :=
 theorem toInt_ofInt (i : Int) : Value.toInt? (Value.ofInt i) = some i := by
   cases i with
   | ofNat n =>
-      simp [Value.ofInt, Value.toInt?, toNat_ofNat]
+      simp [Value.ofInt, Value.toInt?, Value.toBin_ofBin]
   | negSucc n =>
-      simp [Value.ofInt, Value.toInt?, toNat_ofNat]
+      simp [Value.ofInt, Value.toInt?, Value.toBin_ofBin]
       cases n <;> rfl
 
 def negIntV (v : Value) : Value :=

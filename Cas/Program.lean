@@ -12,6 +12,7 @@
 
 import Cas.Bracket
 import Cas.Encode
+import Cas.Bin
 import Cas.Expr
 import Cas.Int
 
@@ -91,7 +92,7 @@ private def evalK0 : Tm := P.lam "rec" (P.lam "x" (P.q tint0))
 private def evalConst (payload : Tm) : Tm :=
   P.lam "rec" (P.lam "x" payload)
 
-/-- The input `x` is a unary nat; pack it as `+x`. -/
+/-- The input `x` is a binary nat; pack it as `+x`. -/
 private def evalVar : Tm :=
   P.lam "rec" (P.lam "x" (Tm.node ◃ Tm.node ◃ P.v "x"))
 
@@ -109,7 +110,7 @@ private def evalPow (payload : Tm) : Tm :=
   P.lam "rec" (P.lam "x"
     (P.onPair payload (P.q tint0) fun a b =>
       P.q tmkInt ◃ Tm.node ◃
-        (P.q tpow ◃ (P.unInt (ev b)) ◃ (P.unInt (ev a)))))
+        (P.q tbPow ◃ (P.unInt (ev b)) ◃ (P.unInt (ev a)))))
 
 private def evalNeg (payload : Tm) : Tm :=
   P.lam "rec" (P.lam "x" (P.q tiNeg ◃ ev payload))
@@ -180,7 +181,7 @@ private def diffMul (payload : Tm) : Tm :=
       P.mkAdd (P.mkMul (dc a) b) (P.mkMul a (dc b)))
 
 private def nm1Expr : Tm :=
-  P.mk 0 (Tm.node ◃ Tm.node ◃ (P.q tpred ◃ P.v "mag"))
+  P.mk 0 (Tm.node ◃ Tm.node ◃ (P.q tbPred ◃ P.v "mag"))
 
 /-- `(u^n)' = n · u^(n-1) · u'` for a non-negative constant `n`. -/
 private def diffPow (payload : Tm) : Tm :=
