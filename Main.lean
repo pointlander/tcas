@@ -18,6 +18,7 @@ def usage : String :=
      cas subst <expr> x=rhs  substitute a sub-expression\n\
      cas encode <expr>       print the expression as a tree\n\
      cas reduce <tree>       reduce a tree-calculus term\n\
+     cas trace <tree> [n]    show each of the five rules (at most n steps)\n\
      cas arith <n> +|*|^ <m> natural arithmetic via tree reduction\n\
      cas kernel-eval <expr> x=<n>\n\
                              evaluate a nat-polynomial by tree reduction\n\
@@ -109,6 +110,10 @@ def demo : IO Unit := do
       match kernelDiffExpr e with
       | some d => IO.println s!"   tdiff ⬝ ⌜sin(x)⌝      ⇒  {Expr.simplify d}"
       | none   => IO.println "   tdiff ⬝ ⌜sin(x)⌝      ⇒  (diverged)"
+  IO.println ""
+  IO.println "5. Reduction trace (cas trace \"K 3 7\")"
+  IO.println (formatTrace (K ⬝ ofNat 3 ⬝ ofNat 7))
+  IO.println ""
   let _ ← runProgramSelfTest
   IO.println ""
   IO.println describeKernel
@@ -205,6 +210,19 @@ def main (args : List String) : IO UInt32 := do
                   IO.println v
                   return 0
               | none => fail "reduction exhausted the evaluation budget"
+  | "trace" :: rest =>
+      match rest with
+      | [] => fail "missing tree term"
+      | s :: more =>
+          match parseTree? s with
+          | none => fail s!"cannot parse tree: {s}"
+          | some t =>
+              let maxSteps :=
+                match more with
+                | n :: _ => n.toNat?.getD defaultMaxSteps
+                | [] => defaultMaxSteps
+              IO.println (formatTrace t maxSteps)
+              return 0
   | "arith" :: sa :: op :: sb :: _ =>
       let na := sa.toNat?
       let nb := sb.toNat?

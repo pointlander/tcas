@@ -100,6 +100,38 @@ private def roundTrip (e : Expr) : Bool :=
         | some t => (eval! t).toTree == I
         | none => false)
 
+/-! ### Reduction tracer -/
+
+#guard (match contract (K ⬝ ofNat 3) (ofNat 7) with
+        | some (t, .k) => t == ofNat 3
+        | _ => false)
+#guard (match contract I △ with
+        | some (_, .s) => true
+        | _ => false)
+#guard (match contract tnot tfalse with
+        | some (t, .triageL) => t == ttrue
+        | _ => false)
+#guard (match contract tpred (ofNat 4) with
+        | some (_, .triageS) => true
+        | _ => false)
+
+private def traceDone (t v : Tree) : Bool :=
+  match runTrace t with
+  | { status := .done, final := w, .. } => w == v
+  | _ => false
+
+#guard traceDone (K ⬝ ofNat 3 ⬝ ofNat 7) (ofNat 3)
+#guard traceDone (I ⬝ △) △
+#guard traceDone (S ⬝ K ⬝ K ⬝ △) △
+#guard traceDone (tnot ⬝ tfalse) ttrue
+#guard traceDone (tpred ⬝ ofNat 4) (ofNat 3)
+#guard (runTrace (K ⬝ ofNat 3 ⬝ ofNat 7)).steps.map (·.rule) == [.k]
+#guard (runTrace (I ⬝ △)).steps.map (·.rule) == [.s, .k]
+#guard (Tree.pretty (K ⬝ ofNat 3 ⬝ ofNat 7) == "K 3 7")
+#guard (match nf (S ⬝ K ⬝ K ⬝ ofNat 5), (runTrace (S ⬝ K ⬝ K ⬝ ofNat 5)).nf? with
+        | some a, some b => a == b
+        | _, _ => false)
+
 /-! ### Compiled eval / diff programs (construction only; reduction is runtime) -/
 
 #guard (eval! (Tm.compile (Tm.lam "x" (Tm.embed I ◃ Tm.v "x")) ⬝ △)).toTree == △

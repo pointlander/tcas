@@ -59,6 +59,19 @@ teval ⬝ ⌜x^2+1⌝ ⬝ ⌜3⌝  →*  ⌜10⌝
 tdiff ⬝ ⌜x^2⌝          →*  ⌜2x⌝
 ```
 
+`cas trace` walks the same call-by-value order as `eval`: the redex is
+always a program-fork applied to a program. Each line marks that redex
+in `[…]`, names the rule (`1` / `2` / `3a` / `3b` / `3c`), and prints
+the term size.
+
+```
+$ lake exe cas trace "I △"
+   [I △]    2    (size 7)
+   [K △ (K △)]    1    (size 6)
+   △    (size 1)
+2 steps, normal form
+```
+
 ## Build
 
 Lean 4.33 (see `lean-toolchain`).
@@ -71,6 +84,8 @@ lake exe cas diff "x^2 + sin(x)"
 lake exe cas normalize "(x+1)*(x-1)"
 lake exe cas arith 2 + 3
 lake exe cas reduce "S K K △"
+lake exe cas trace "S K K △"
+lake exe cas trace "K 3 7"
 lake exe cas kernel-eval "x^2+1" x=3
 lake exe cas kernel-diff "x^2 + sin(x)"
 lake exe cas test
@@ -101,5 +116,8 @@ Cas/Program.lean    teval / tdiff as Y2 + triage programs
 Cas/Kernel.lean     run those programs; Lean walkers as spec
 Cas/Semantics.lean  fuelled evaluator lemmas (K, I, wait, values)
 Cas/Arith.lean      plus/times/pow denotation, uniqueness, pred/isZero
+Cas/StarBeta.lean   operational star-β
+Cas/Fixpoint.lean   Y2 / Z / swap unfolding
+Cas/Trace.lean      CBV tracer for the five rules
 Cas/Tests.lean      compile-time #guard checks + runtime self-test
 ```
