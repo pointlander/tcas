@@ -59,6 +59,15 @@ teval ⬝ ⌜x^2+1⌝ ⬝ ⌜3⌝  →*  ⌜10⌝
 tdiff ⬝ ⌜x^2⌝          →*  ⌜2x⌝
 ```
 
+`tequal` is Jay’s intensional equality as a tree program: a `Y2` of
+nested `triage` that compares two programs node by node. In particular
+`equal ⬝ equal ⬝ equal` is true — no encoding of programs as syntax.
+
+```
+tequal ⬝ K ⬝ K  →*  true
+tequal ⬝ K ⬝ I  →*  false
+```
+
 `cas trace` walks the same call-by-value order as `eval`: the redex is
 always a program-fork applied to a program. Each line marks that redex
 in `[…]`, names the rule (`1` / `2` / `3a` / `3b` / `3c`), and prints
@@ -86,6 +95,8 @@ lake exe cas arith 2 + 3
 lake exe cas reduce "S K K △"
 lake exe cas trace "S K K △"
 lake exe cas trace "K 3 7"
+lake exe cas equal K I
+lake exe cas equal "S K K" I
 lake exe cas kernel-eval "x^2+1" x=3
 lake exe cas kernel-diff "x^2 + sin(x)"
 lake exe cas test
@@ -107,7 +118,7 @@ and agrees with ordinary `Nat` evaluation (`evalPoly_natPoly`).
 Cas/Tree.lean       terms, K, S, I, triage
 Cas/Reduce.lean     the five rules, evaluator
 Cas/Bracket.lean    star abstraction, Y2
-Cas/Encode.lean     bool / nat / pair / list, plus, times, pow
+Cas/Encode.lean     bool / nat / pair / list, plus, times, pow, equal
 Cas/Expr.lean       surface AST ↔ tree
 Cas/Algebra.lean    eval, subst, simplify, expand, collect
 Cas/Diff.lean       symbolic differentiation + lemmas

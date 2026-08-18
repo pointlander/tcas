@@ -52,6 +52,12 @@ def kernelSucc (a : Value) : Value :=
 def kernelIsZero (a : Value) : Option Value :=
   run1 tisZero a
 
+/-- Intensional equality of two programs, as a boolean. -/
+def kernelEqual (a b : Value) (fuel : Nat := Value.defaultFuel) : Option Bool :=
+  match run2 tequal a b fuel with
+  | some v => v.toBool?
+  | none   => none
+
 /-! ### Intensional analysis of encoded expressions
 
   A fork `△ tag payload` is an expression constructor. Nested stems on
@@ -250,6 +256,7 @@ def powProgram : Tree := tpow
 def predProgram : Tree := tpred
 def isZeroProgram : Tree := tisZero
 def notProgram : Tree := tnot
+def equalProgram : Tree := tequal
 def evalProgram : Tree := teval
 def diffProgram : Tree := tdiff
 
@@ -262,6 +269,7 @@ def describeKernel : String :=
    pow      Y2 (λe p b. triage {1, λe₁. times b (p e₁ b), λ_ _. 1} e)\n\
    expr     △ ⟨ctor⟩ ⟨payload⟩   ctor = stem-chain index\n\
    eval     Y2 + nested triage; plus/times/pow for arithmetic\n\
-   diff     Y2 + nested triage; result is an encoded expression"
+   diff     Y2 + nested triage; result is an encoded expression\n\
+   equal    Y2 + nested triage on both arguments (intensional)"
 
 end Cas

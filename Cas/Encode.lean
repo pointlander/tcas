@@ -69,6 +69,45 @@ def tpred : Tree :=
 def tisZero : Tree :=
   triage ttrue (K ⬝ tfalse) (K ⬝ (K ⬝ tfalse))
 
+/-! ### Generic queries (intensional) -/
+
+/-- `isLeaf = triage { true, λ_. false, λ_ _. false }` -/
+def tisLeaf : Tree :=
+  triage ttrue (K ⬝ tfalse) (K ⬝ (K ⬝ tfalse))
+
+/-- `isStem = triage { false, λ_. true, λ_ _. false }` -/
+def tisStem : Tree :=
+  triage tfalse (K ⬝ ttrue) (K ⬝ (K ⬝ tfalse))
+
+/-- `isFork = triage { false, λ_. false, λ_ _. true }` -/
+def tisFork : Tree :=
+  triage tfalse (K ⬝ tfalse) (K ⬝ (K ⬝ ttrue))
+
+/--
+  Intensional equality of programs (Jay).
+
+  `Y2 (λx eq. triage {leaf, stem, fork} x)` then compares the second
+  argument. Dispatch on `x` happens *before* the recursor is applied,
+  so eager `S` does not copy `eq` into unused constructor cases.
+
+    leaf:  triage { true, λ_. false, λ_ _. false }
+    stem:  λx₁ eq. triage { false, eq x₁, λ_ _. false }
+    fork:  λx₁ x₂ eq. triage { false, λ_. false,
+                               λy₁ y₂. and (eq x₁ y₁) (eq x₂ y₂) }
+-/
+def tequal : Tree :=
+  Y2 (star "x" (
+    triage
+      (star "eq" (triage ttrue (K ⬝ tfalse) (K ⬝ (K ⬝ tfalse))))
+      (star "x1" (star "eq" (
+        triage tfalse (.ref "eq" ⬝ .ref "x1") (K ⬝ (K ⬝ tfalse)))))
+      (star "x1" (star "x2" (star "eq" (
+        triage tfalse (K ⬝ tfalse)
+          (star "y1" (star "y2"
+            (tand ⬝ (.ref "eq" ⬝ .ref "x1" ⬝ .ref "y1")
+                   ⬝ (.ref "eq" ⬝ .ref "x2" ⬝ .ref "y2"))))))))
+      ⬝ .ref "x"))
+
 /-- `plus = Y2 (λm plus n. triage { n, λm₁. succ (plus m₁ n), λ_ _. n } m)` -/
 def tplus : Tree :=
   Y2 (star "m" (star "plus" (star "n"
@@ -145,6 +184,37 @@ def toInt? : Value → Option Int
       | some k => some (Int.negOfNat k)
       | none   => none
   | _ => none
+
+/-- Structural (intensional) equality of values. The denotation of `tequal`. -/
+def equalV : Value → Value → Bool
+  | .leaf, .leaf         => true
+  | .stem x, .stem y     => equalV x y
+  | .fork a b, .fork c d => equalV a c && equalV b d
+  | _, _                 => false
+
+theorem equalV_rfl (v : Value) : equalV v v = true := by
+  induction v with
+  | leaf => rfl
+  | stem x ih => simpa [equalV] using ih
+  | fork a b iha ihb => simp [equalV, iha, ihb]
+
+theorem equalV_eq (a b : Value) : equalV a b = true ↔ a = b := by
+  induction a generalizing b with
+  | leaf =>
+      cases b <;> simp [equalV]
+  | stem x ih =>
+      cases b with
+      | leaf => simp [equalV]
+      | stem y =>
+          simp [equalV]
+          exact ih y
+      | fork _ _ => simp [equalV]
+  | fork a1 a2 ih1 ih2 =>
+      cases b with
+      | leaf => simp [equalV]
+      | stem _ => simp [equalV]
+      | fork b1 b2 =>
+          simp [equalV, Bool.and_eq_true, ih1 b1, ih2 b2]
 
 end Value
 

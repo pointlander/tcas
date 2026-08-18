@@ -38,6 +38,16 @@ namespace Cas.Tests
 #guard (eval! (tpred ⬝ ofNat 4)).toNat? == some 3
 #guard (eval! (tisZero ⬝ ofNat 0)).toTree == ttrue
 #guard (eval! (tisZero ⬝ ofNat 2)).toTree == tfalse
+
+#guard (eval! (tisLeaf ⬝ △)).toTree == ttrue
+#guard (eval! (tisLeaf ⬝ (△ ⬝ △))).toTree == tfalse
+#guard (eval! (tisStem ⬝ (△ ⬝ △))).toTree == ttrue
+#guard (eval! (tisFork ⬝ (△ ⬝ △ ⬝ △))).toTree == ttrue
+
+#guard Value.equalV .leaf .leaf
+#guard !(Value.equalV .leaf (.stem .leaf))
+#guard Value.equalV (Value.ofNat 4) (Value.ofNat 4)
+#guard !(Value.equalV (Value.ofNat 4) (Value.ofNat 3))
 #guard (eval! (△ ⬝ ofNat 3)).toNat? == some 4
 
 #guard plusV (Value.ofNat 2) (Value.ofNat 3) == Value.ofNat 5
@@ -48,6 +58,25 @@ namespace Cas.Tests
 
 #guard (eval! (tfirst ⬝ (tpair (ofNat 2) (ofNat 5)))).toNat? == some 2
 #guard (eval! (tsecond ⬝ (tpair (ofNat 2) (ofNat 5)))).toNat? == some 5
+
+/-! ### Intensional equality -/
+
+#guard tequal.isProgram
+#guard tequal.isClosed
+#guard (eval! (tequal ⬝ △ ⬝ △)).toTree == ttrue
+#guard (eval! (tequal ⬝ △ ⬝ (△ ⬝ △))).toTree == tfalse
+#guard (eval! (tequal ⬝ K ⬝ K)).toTree == ttrue
+#guard (eval! (tequal ⬝ K ⬝ I)).toTree == tfalse
+#guard (eval! (tequal ⬝ I ⬝ I)).toTree == ttrue
+#guard (eval! (tequal ⬝ ofNat 5 ⬝ ofNat 5)).toTree == ttrue
+#guard (eval! (tequal ⬝ ofNat 5 ⬝ ofNat 4)).toTree == tfalse
+#guard (eval! (tequal ⬝ (△ ⬝ ofNat 2 ⬝ ofNat 3) ⬝ (△ ⬝ ofNat 2 ⬝ ofNat 3))).toTree
+        == ttrue
+#guard (eval! (tequal ⬝ (△ ⬝ ofNat 2 ⬝ ofNat 3) ⬝ (△ ⬝ ofNat 2 ⬝ ofNat 4))).toTree
+        == tfalse
+#guard (match kernelEqual (Value.ofNat 7) (Value.ofNat 7) with
+        | some b => b == true
+        | none => false)
 
 /-! ### Surface CAS -/
 
@@ -172,6 +201,10 @@ def programSelfTest : Option String :=
     , expect "tdiff exp(x)" (kd "exp(x)") (some "exp(x)")
     , expect "tdiff ln(x)" (kd "ln(x)") (some "1 / x")
     , if ev "(x+1)*(x+2)" 3 == some 20 then none else some "teval (x+1)*(x+2) @ 3"
+    , let eqv := eval! tequal
+      if kernelEqual eqv eqv == some true then none else some "equal equal equal"
+    , if kernelEqual (eval! tequal) (eval! tnot) == some false then none
+      else some "equal equal not"
     ]
 
 end Cas.Tests

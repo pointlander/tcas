@@ -23,7 +23,8 @@ def usage : String :=
      cas kernel-eval <expr> x=<n>\n\
                              evaluate a nat-polynomial by tree reduction\n\
      cas kernel-diff <expr>  differentiate the encoded tree\n\
-     cas show plus|times|pow|pred|not|eval|diff\n\
+     cas equal <t1> <t2>     intensional equality of two tree programs\n\
+     cas show plus|times|pow|pred|not|equal|eval|diff\n\
                              print a kernel combinator\n\
    \n\
      expressions:  2*x^3 + sin(x) - 1/x\n\
@@ -32,6 +33,7 @@ def usage : String :=
 def runProgramSelfTest : IO Bool := do
   IO.println s!"   teval {teval.size} nodes (program {teval.isProgram})"
   IO.println s!"   tdiff {tdiff.size} nodes (program {tdiff.isProgram})"
+  IO.println s!"   tequal {tequal.size} nodes (program {tequal.isProgram})"
   match Cas.Tests.programSelfTest with
   | none =>
       IO.println "   program self-test: ok"
@@ -113,6 +115,17 @@ def demo : IO Unit := do
   IO.println ""
   IO.println "5. Reduction trace (cas trace \"K 3 7\")"
   IO.println (formatTrace (K ⬝ ofNat 3 ⬝ ofNat 7))
+  IO.println ""
+  IO.println "6. Intensional equality"
+  IO.println s!"   tequal  ({tequal.size} nodes, program {tequal.isProgram})"
+  let showEq (label : String) (a b : Tree) : IO Unit := do
+    match kernelEqual (eval! a) (eval! b) with
+    | some v => IO.println s!"   equal {label}  ⇒  {v}"
+    | none   => IO.println s!"   equal {label}  ⇒  (diverged)"
+  showEq "K K" K K
+  showEq "K I" K I
+  showEq "3 3" (ofNat 3) (ofNat 3)
+  showEq "3 4" (ofNat 3) (ofNat 4)
   IO.println ""
   let _ ← runProgramSelfTest
   IO.println ""
@@ -223,6 +236,22 @@ def main (args : List String) : IO UInt32 := do
                 | [] => defaultMaxSteps
               IO.println (formatTrace t maxSteps)
               return 0
+  | "equal" :: rest =>
+      match rest with
+      | sa :: sb :: _ =>
+          match parseTree? sa, parseTree? sb with
+          | some a, some b =>
+              match nf a, nf b with
+              | some av, some bv =>
+                  match kernelEqual (eval! av) (eval! bv) with
+                  | some v =>
+                      IO.println v
+                      return 0
+                  | none => fail "equal exhausted the evaluation budget"
+              | _, _ => fail "equal expects two closed programs"
+          | none, _ => fail s!"cannot parse tree: {sa}"
+          | _, none => fail s!"cannot parse tree: {sb}"
+      | _ => fail "equal needs two tree terms"
   | "arith" :: sa :: op :: sb :: _ =>
       let na := sa.toNat?
       let nb := sb.toNat?
@@ -281,6 +310,7 @@ def main (args : List String) : IO UInt32 := do
         | "pow"   => some powProgram
         | "pred"  => some predProgram
         | "not"   => some notProgram
+        | "equal" => some equalProgram
         | "eval"  => some evalProgram
         | "diff"  => some diffProgram
         | "I"     => some I
