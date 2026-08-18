@@ -69,6 +69,33 @@ def tpred : Tree :=
 def tisZero : Tree :=
   triage ttrue (K ⬝ tfalse) (K ⬝ (K ⬝ tfalse))
 
+/-- Three-way compare on unary nats: `△` = LT, `△ △` = EQ, `△ △ △` = GT. -/
+def tcmp : Tree :=
+  Y2 (star "m" (
+    triage
+      (star "cmp" (star "n" (
+        triage (△ ⬝ △) (K ⬝ △) (K ⬝ (K ⬝ △)) ⬝ .ref "n")))
+      (star "m1" (star "cmp" (star "n" (
+        triage (△ ⬝ △ ⬝ △)
+          (star "n1" (.ref "cmp" ⬝ .ref "m1" ⬝ .ref "n1"))
+          (star "_" (star "_" (△ ⬝ △ ⬝ △)))
+          ⬝ .ref "n"))))
+      (star "_" (star "_" (star "cmp" (star "n" (△ ⬝ △)))))
+      ⬝ .ref "m"))
+
+/-- Saturating subtraction on unary nats: `minus 0 n = 0`, `minus m 0 = m`. -/
+def tminus : Tree :=
+  Y2 (star "m" (
+    triage
+      (star "minus" (star "n" △))
+      (star "m1" (star "minus" (star "n" (
+        triage (△ ⬝ .ref "m1")
+          (star "n1" (.ref "minus" ⬝ .ref "m1" ⬝ .ref "n1"))
+          (star "_" (star "_" △))
+          ⬝ .ref "n"))))
+      (star "_" (star "_" (star "minus" (star "n" △))))
+      ⬝ .ref "m"))
+
 /-! ### Generic queries (intensional) -/
 
 /-- `isLeaf = triage { true, λ_. false, λ_ _. false }` -/

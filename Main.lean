@@ -21,7 +21,7 @@ def usage : String :=
      cas trace <tree> [n]    show each of the five rules (at most n steps)\n\
      cas arith <n> +|*|^ <m> natural arithmetic via tree reduction\n\
      cas kernel-eval <expr> x=<n>\n\
-                             evaluate a nat-polynomial by tree reduction\n\
+                             evaluate a polynomial by tree reduction (ℤ)\n\
      cas kernel-diff <expr>  differentiate the encoded tree\n\
      cas equal <t1> <t2>     intensional equality of two tree programs\n\
      cas size <tree>         count nodes of a tree program\n\
@@ -29,7 +29,9 @@ def usage : String :=
      cas bin '*' <n> <m>     binary-nat multiplication\n\
      cas bin '^' <n> <m>     binary-nat exponent (quote * and ^)\n\
      cas bin succ|pred <n>   binary successor / predecessor\n\
-     cas show plus|times|pow|pred|not|equal|size|bplus|eval|diff\n\
+     cas int +|-|* <i> <j>   signed-int arithmetic\n\
+     cas int neg <i>         signed-int negation\n\
+     cas show plus|times|pow|pred|minus|iplus|eval|diff\n\
                              print a kernel combinator\n\
    \n\
      expressions:  2*x^3 + sin(x) - 1/x\n\
@@ -118,6 +120,18 @@ def demo : IO Unit := do
       match kernelDiffExpr e with
       | some d => IO.println s!"   tdiff ⬝ ⌜sin(x)⌝      ⇒  {Expr.simplify d}"
       | none   => IO.println "   tdiff ⬝ ⌜sin(x)⌝      ⇒  (diverged)"
+  match parseExpr? "x-1" with
+  | none => pure ()
+  | some e =>
+      match kernelEvalInt 4 e with
+      | some n => IO.println s!"   teval ⬝ ⌜x-1⌝ ⬝ ⌜4⌝   ⇒  {n}"
+      | none   => IO.println "   teval ⬝ ⌜x-1⌝ ⬝ ⌜4⌝   ⇒  (diverged)"
+  match parseExpr? "1-x" with
+  | none => pure ()
+  | some e =>
+      match kernelEvalInt 4 e with
+      | some n => IO.println s!"   teval ⬝ ⌜1-x⌝ ⬝ ⌜4⌝   ⇒  {n}"
+      | none   => IO.println "   teval ⬝ ⌜1-x⌝ ⬝ ⌜4⌝   ⇒  (diverged)"
   IO.println ""
   IO.println "5. Reduction trace (cas trace \"K 3 7\")"
   IO.println (formatTrace (K ⬝ ofNat 3 ⬝ ofNat 7))
@@ -167,6 +181,11 @@ def kernelNamed : String → Option Tree
   | "not"   => some notProgram
   | "equal" => some equalProgram
   | "size"  => some sizeProgram
+  | "minus" => some minusProgram
+  | "ineg"  => some inegProgram
+  | "iplus" => some iplusProgram
+  | "iminus" => some iminusProgram
+  | "itimes" => some itimesProgram
   | "bsucc" => some bsuccProgram
   | "bpred" => some bpredProgram
   | "bplus" => some bplusProgram
@@ -356,6 +375,40 @@ def main (args : List String) : IO UInt32 := do
               else
                 fail s!"unknown binary operator {op} (use + * ^ succ pred)"
       | _, _ => fail "bin expects two natural numbers"
+  | "int" :: "neg" :: s :: _ =>
+      match parseInt? s with
+      | none => fail "int neg expects an integer"
+      | some n =>
+          match kernelINeg (Value.ofInt n) with
+          | some v =>
+              match v.toInt? with
+              | some i =>
+                  IO.println i
+                  return 0
+              | none => fail "int neg produced a non-integer"
+          | none => fail "int neg exhausted the evaluation budget"
+  | "int" :: op :: sa :: sb :: _ =>
+      match parseInt? sa, parseInt? sb with
+      | some a, some b =>
+          let r :=
+            match op with
+            | "+" => kernelIAdd (Value.ofInt a) (Value.ofInt b)
+            | "-" => kernelISub (Value.ofInt a) (Value.ofInt b)
+            | "*" => kernelIMul (Value.ofInt a) (Value.ofInt b)
+            | _   => none
+          match r with
+          | some v =>
+              match v.toInt? with
+              | some i =>
+                  IO.println i
+                  return 0
+              | none => fail "int op produced a non-integer"
+          | none =>
+              if op == "+" || op == "-" || op == "*" then
+                fail "signed-int reduction diverged"
+              else
+                fail s!"unknown int operator {op} (use + - * neg)"
+      | _, _ => fail "int expects two integers"
   | "arith" :: sa :: op :: sb :: _ =>
       let na := sa.toNat?
       let nb := sb.toNat?
@@ -394,11 +447,11 @@ def main (args : List String) : IO UInt32 := do
               | some xv =>
                   if xv < 0 then fail "kernel-eval expects a natural x"
                   else
-                    match kernelEvalExpr xv.toNat e with
+                    match kernelEvalInt xv.toNat e with
                     | some n =>
                         IO.println n
                         return 0
-                    | none => fail "not a non-negative polynomial in x"
+                    | none => fail "kernel-eval could not evaluate the encoded tree"
   | "kernel-diff" :: rest =>
       match needExpr rest with
       | .error m => fail m

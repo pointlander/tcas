@@ -51,6 +51,14 @@ namespace Cas.Tests
 #guard (eval! (△ ⬝ ofNat 3)).toNat? == some 4
 
 #guard plusV (Value.ofNat 2) (Value.ofNat 3) == Value.ofNat 5
+#guard minusV (Value.ofNat 5) (Value.ofNat 3) == Value.ofNat 2
+#guard minusV (Value.ofNat 3) (Value.ofNat 5) == Value.ofNat 0
+#guard tminus.isProgram && tcmp.isProgram
+#guard tiNeg.isProgram && tiPlus.isProgram
+#guard tiMinus.isProgram && tiTimes.isProgram
+#guard Value.toInt? (Value.ofInt 5) == some 5
+#guard Value.toInt? (Value.ofInt (-3)) == some (-3)
+#guard plusIntV (Value.ofInt 3) (Value.ofInt (-5)) == Value.ofInt (-2)
 #guard mulV (Value.ofNat 3) (Value.ofNat 4) == Value.ofNat 12
 #guard powV (Value.ofNat 2) (Value.ofNat 5) == Value.ofNat 32
 
@@ -217,6 +225,11 @@ def programSelfTest : Option String :=
     [ if ev "2" 0 == some 2 then none else some "teval 2"
     , if ev "x" 5 == some 5 then none else some "teval x @ 5"
     , if ev "x+1" 4 == some 5 then none else some "teval x+1 @ 4"
+    , if ev "x-1" 4 == some 3 then none else some "teval x-1 @ 4"
+    , if kernelEvalInt 4 (parseExpr? "1-x" |>.getD (.const 0)) == some (-3)
+      then none else some "teval 1-x @ 4"
+    , if kernelEvalInt 0 (parseExpr? "-2" |>.getD (.const 0)) == some (-2)
+      then none else some "teval -2"
     , if ev "2*x+1" 3 == some 7 then none else some "teval 2*x+1 @ 3"
     , if ev "x^2+1" 3 == some 10 then none else some "teval x^2+1 @ 3"
     , expect "tdiff 2" (kd "2") (some "0")
@@ -248,6 +261,15 @@ def programSelfTest : Option String :=
       else some "bin 6*7"
     , if kernelBinPow (Value.ofBin 2) (Value.ofBin 5) == some 32 then none
       else some "bin 2^5"
+    , match kernelMinus (Value.ofNat 5) (Value.ofNat 3) with
+      | some v => if v.toNat? == some 2 then none else some "minus 5 3"
+      | none => some "minus 5 3: diverged"
+    , match kernelIAdd (Value.ofInt 3) (Value.ofInt (-5)) with
+      | some v => if v.toInt? == some (-2) then none else some "int 3+(-5)"
+      | none => some "int 3+(-5): diverged"
+    , match kernelISub (Value.ofInt 1) (Value.ofInt 4) with
+      | some v => if v.toInt? == some (-3) then none else some "int 1-4"
+      | none => some "int 1-4: diverged"
     ]
 
 end Cas.Tests

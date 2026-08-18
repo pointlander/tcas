@@ -87,6 +87,15 @@ Binary nats (`Value.ofBin`) store bits LSB-first, so plus and times walk
 `tbPlus`, `tbTimes` and `tbPow` are `Y2` programs on that encoding.
 Unary `tplus` / `ttimes` remain for the kernel evaluator.
 
+Signed integers are sign-magnitude (`+n = △ △ n`, `−n = △ (△ △) n`)
+with unary magnitude. `tiPlus` / `tiMinus` / `tiNeg` / `tiTimes` are
+tree programs, so the kernel can evaluate `x-1` and `1-x`:
+
+```
+teval ⬝ ⌜x-1⌝ ⬝ ⌜4⌝  →*  ⌜3⌝
+teval ⬝ ⌜1-x⌝ ⬝ ⌜4⌝  →*  ⌜-3⌝
+```
+
 `cas trace` walks the same call-by-value order as `eval`: the redex is
 always a program-fork applied to a program. Each line marks that redex
 in `[…]`, names the rule (`1` / `2` / `3a` / `3b` / `3c`), and prints
@@ -121,6 +130,10 @@ lake exe cas size size
 lake exe cas bin + 13 21
 lake exe cas bin '*' 6 7
 lake exe cas bin '^' 2 5
+lake exe cas kernel-eval "x-1" x=4
+lake exe cas kernel-eval "1-x" x=4
+lake exe cas int + 3 -5
+lake exe cas int - 1 4
 lake exe cas kernel-eval "x^2+1" x=3
 lake exe cas kernel-diff "x^2 + sin(x)"
 lake exe cas test
@@ -144,6 +157,7 @@ Cas/Reduce.lean     the five rules, evaluator
 Cas/Bracket.lean    star abstraction, Y2
 Cas/Encode.lean     bool / nat / pair / list, plus, times, pow, equal, size
 Cas/Bin.lean        little-endian binary nats and their programs
+Cas/Int.lean        sign-magnitude integers; plus / minus / times
 Cas/Expr.lean       surface AST ↔ tree
 Cas/Algebra.lean    eval, subst, simplify, expand, collect
 Cas/Diff.lean       symbolic differentiation + lemmas

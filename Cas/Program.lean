@@ -13,6 +13,7 @@
 import Cas.Bracket
 import Cas.Encode
 import Cas.Expr
+import Cas.Int
 
 namespace Cas
 
@@ -83,29 +84,35 @@ end P
 
 private def ev (e : Tm) : Tm := P.v "rec" ◃ e ◃ P.v "x"
 
-/-- `λrec x. 0` -/
-private def evalK0 : Tm := P.lam "rec" (P.lam "x" Tm.node)
+/-- `λrec x. +0` -/
+private def evalK0 : Tm := P.lam "rec" (P.lam "x" (P.q tint0))
 
+/-- A constant is already an `ofInt`; return the payload as a signed value. -/
 private def evalConst (payload : Tm) : Tm :=
-  P.lam "rec" (P.lam "x" (P.unInt payload))
+  P.lam "rec" (P.lam "x" payload)
 
+/-- The input `x` is a unary nat; pack it as `+x`. -/
 private def evalVar : Tm :=
-  P.lam "rec" (P.lam "x" (P.v "x"))
+  P.lam "rec" (P.lam "x" (Tm.node ◃ Tm.node ◃ P.v "x"))
 
 private def evalAdd (payload : Tm) : Tm :=
   P.lam "rec" (P.lam "x"
-    (P.onPair payload Tm.node fun a b =>
-      P.q tplus ◃ ev a ◃ ev b))
+    (P.onPair payload (P.q tint0) fun a b =>
+      P.q tiPlus ◃ ev a ◃ ev b))
 
 private def evalMul (payload : Tm) : Tm :=
   P.lam "rec" (P.lam "x"
-    (P.onPair payload Tm.node fun a b =>
-      P.q ttimes ◃ ev a ◃ ev b))
+    (P.onPair payload (P.q tint0) fun a b =>
+      P.q tiTimes ◃ ev a ◃ ev b))
 
 private def evalPow (payload : Tm) : Tm :=
   P.lam "rec" (P.lam "x"
-    (P.onPair payload Tm.node fun a b =>
-      P.q tpow ◃ ev b ◃ ev a))
+    (P.onPair payload (P.q tint0) fun a b =>
+      P.q tmkInt ◃ Tm.node ◃
+        (P.q tpow ◃ (P.unInt (ev b)) ◃ (P.unInt (ev a)))))
+
+private def evalNeg (payload : Tm) : Tm :=
+  P.lam "rec" (P.lam "x" (P.q tiNeg ◃ ev payload))
 
 /-- `rest` is the tag with the first stem peeled off (ctor ≥ 1). -/
 private def evalFrom1 (rest payload : Tm) : Tm :=
@@ -120,7 +127,12 @@ private def evalFrom1 (rest payload : Tm) : Tm :=
             (P.lam "t"
               (Tm.triage
                 (evalPow payload)
-                (P.lam "_" evalK0)
+                (P.lam "t"
+                  (Tm.triage
+                    (evalNeg payload)
+                    (P.lam "_" evalK0)
+                    (P.lam "_" (P.lam "_" evalK0))
+                    (P.v "t")))
                 (P.lam "_" (P.lam "_" evalK0))
                 (P.v "t")))
             (P.lam "_" (P.lam "_" evalK0))

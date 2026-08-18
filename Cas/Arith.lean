@@ -48,6 +48,31 @@ theorem powV_zero (b : Value) : powV b .leaf = .stem .leaf := rfl
 
 theorem powV_succ (b e : Value) : powV b (.stem e) = mulV b (powV b e) := rfl
 
+/-- Saturating subtraction: `minus 0 n = 0`, `minus m 0 = m`. -/
+def minusV : Value → Value → Value
+  | .leaf, _     => .leaf
+  | m, .leaf     => m
+  | .stem m, .stem n => minusV m n
+  | .fork _ _, _ => .leaf
+  | m, .fork _ _ => m
+
+theorem minusV_zero_left (n : Value) : minusV .leaf n = .leaf := rfl
+
+theorem minusV_zero_right (m : Value) : minusV m .leaf = m := by
+  cases m <;> rfl
+
+theorem minusV_ofNat (m n : Nat) :
+    minusV (Value.ofNat m) (Value.ofNat n) = Value.ofNat (m - n) := by
+  induction m generalizing n with
+  | zero =>
+      simp [Value.ofNat, minusV]
+  | succ m ih =>
+      cases n with
+      | zero =>
+          simp [Value.ofNat, minusV]
+      | succ n =>
+          simp [Value.ofNat, minusV, ih, Nat.succ_sub_succ]
+
 theorem plusV_ofNat (m n : Nat) :
     plusV (Value.ofNat m) (Value.ofNat n) = Value.ofNat (m + n) := by
   induction m with

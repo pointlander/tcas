@@ -258,6 +258,14 @@ partial def trim : String → String
         else copy (next s p) (acc.push (get s p))
       copy a ""
 
+def parseInt? (s : String) : Option Int :=
+  let s := trim s
+  if s.startsWith "-" then
+    (s.dropPrefix? "-").bind (fun sl =>
+      sl.toString.toNat?.map (fun n => -Int.ofNat n))
+  else
+    s.toNat?.map Int.ofNat
+
 def parseBinding (s : String) : Option (String × Int) :=
   let parts := s.splitOn "="
   match parts with

@@ -9,6 +9,7 @@
 
 import Cas.Encode
 import Cas.Bin
+import Cas.Int
 import Cas.Expr
 import Cas.Algebra
 import Cas.Diff
@@ -114,45 +115,57 @@ def pairPayload? : Value → Option (Value × Value)
   | .fork a b => some (a, b)
   | _         => none
 
-/-- Lean-side intensional walker; the specification of `teval`. -/
+/-- Lean-side intensional walker; the specification of `teval`.
+    Results are sign-magnitude integers (`Value.ofInt`). -/
 partial def walkEval (x : Value) (e : Value) : Option Value :=
   match e with
   | .fork tag payload =>
       match tag.toNat? with
       | some 0 =>
-          -- const: `ofInt` is `△ sign mag`. Only non-negative constants.
-          match payload with
-          | .fork .leaf mag => some mag
-          | _ => none
-      | some 1 => some x
+          -- const: payload is already an `ofInt`
+          some payload
+      | some 1 =>
+          -- var: pack the unary input as `+x`
+          some (.fork .leaf x)
       | some 2 =>
           match payload with
           | .fork a b =>
               match walkEval x a, walkEval x b with
-              | some va, some vb => kernelAdd va vb
+              | some va, some vb =>
+                  match va.toInt?, vb.toInt? with
+                  | some i, some j => some (Value.ofInt (i + j))
+                  | _, _ => none
               | _, _ => none
           | _ => none
       | some 3 =>
           match payload with
           | .fork a b =>
               match walkEval x a, walkEval x b with
-              | some va, some vb => kernelMul va vb
+              | some va, some vb =>
+                  match va.toInt?, vb.toInt? with
+                  | some i, some j => some (Value.ofInt (i * j))
+                  | _, _ => none
               | _, _ => none
           | _ => none
       | some 4 =>
           match payload with
           | .fork a b =>
               match walkEval x a, walkEval x b with
-              | some va, some vb => kernelPow va vb
+              | some va, some vb =>
+                  match va.toInt?, vb.toInt? with
+                  | some i, some j =>
+                      if 0 ≤ j then
+                        some (Value.ofInt (i ^ j.toNat))
+                      else none
+                  | _, _ => none
               | _, _ => none
           | _ => none
       | some 5 =>
-          -- neg: only `-0`
           match walkEval x payload with
           | some v =>
-              match v.toNat? with
-              | some 0 => some (.leaf)
-              | _ => none
+              match v.toInt? with
+              | some i => some (Value.ofInt (-i))
+              | none => none
           | none => none
       | _ => none
   | _ => none
@@ -161,10 +174,30 @@ partial def walkEval (x : Value) (e : Value) : Option Value :=
 def kernelEval (x e : Value) (fuel : Nat := Value.defaultFuel) : Option Value :=
   run2 teval e x fuel
 
-def kernelEvalExpr (x : Nat) (e : Expr) : Option Nat :=
+def kernelEvalInt (x : Nat) (e : Expr) : Option Int :=
   match kernelEval (Value.ofNat x) (Expr.encode e) with
-  | some v => v.toNat?
+  | some v => v.toInt?
   | none   => none
+
+def kernelEvalExpr (x : Nat) (e : Expr) : Option Nat :=
+  match kernelEvalInt x e with
+  | some i => if 0 ≤ i then some i.toNat else none
+  | none => none
+
+def kernelMinus (a b : Value) : Option Value :=
+  run2 tminus a b
+
+def kernelIAdd (a b : Value) : Option Value :=
+  run2 tiPlus a b
+
+def kernelISub (a b : Value) : Option Value :=
+  run2 tiMinus a b
+
+def kernelIMul (a b : Value) : Option Value :=
+  run2 tiTimes a b
+
+def kernelINeg (a : Value) : Option Value :=
+  run1 tiNeg a
 
 /-- Lean-side intensional walker; the specification of `tdiff`. -/
 partial def walkDiff : Value → Option Value
@@ -297,6 +330,11 @@ def bpredProgram : Tree := tbPred
 def bplusProgram : Tree := tbPlus
 def btimesProgram : Tree := tbTimes
 def bpowProgram : Tree := tbPow
+def minusProgram : Tree := tminus
+def inegProgram : Tree := tiNeg
+def iplusProgram : Tree := tiPlus
+def iminusProgram : Tree := tiMinus
+def itimesProgram : Tree := tiTimes
 def evalProgram : Tree := teval
 def diffProgram : Tree := tdiff
 
@@ -312,6 +350,7 @@ def describeKernel : String :=
    diff     Y2 + nested triage; result is an encoded expression\n\
    equal    Y2 + nested triage on both arguments (intensional)\n\
    size     Y2 + triage {1, λx. succ (size x), λx y. succ (size x + size y)}\n\
-   binary   0 = △, 2k = △ △ k, 2k+1 = △ (△ △) k  (LSB first)"
+   binary   0 = △, 2k = △ △ k, 2k+1 = △ (△ △) k  (LSB first)\n\
+   int      +n = △ △ n, −n = △ (△ △) n; plus / minus / times"
 
 end Cas
