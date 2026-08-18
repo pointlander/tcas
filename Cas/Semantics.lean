@@ -96,6 +96,33 @@ theorem eval_mono {n m : Nat} (hle : n ≤ m) {t : Tree} {v : Value} :
 
 /-! ### Termination relation -/
 
+/-- `Evals t v` means `t` evaluates to `v` with some fuel. -/
+def Evals (t : Tree) (v : Value) : Prop :=
+  ∃ fuel, eval fuel t = some v
+
+theorem evals_det {t : Tree} {v w : Value} (hv : Evals t v) (hw : Evals t w) : v = w := by
+  obtain ⟨n, hv⟩ := hv
+  obtain ⟨m, hw⟩ := hw
+  have hv' := eval_mono (Nat.le_max_left n m) hv
+  have hw' := eval_mono (Nat.le_max_right n m) hw
+  simp [hv'] at hw'
+  exact hw'
+
+theorem evals_mono {t : Tree} {v : Value} {n : Nat}
+    (h : eval n t = some v) : Evals t v :=
+  ⟨n, h⟩
+
+theorem evals_app_inv {f a : Tree} {r : Value} (h : Evals (f ⬝ a) r) :
+    ∃ fv av n, eval n f = some fv ∧ eval n a = some av ∧ Value.apply n fv av = some r := by
+  obtain ⟨k, hk⟩ := h
+  cases k with
+  | zero => simp [eval] at hk
+  | succ n =>
+      simp [eval] at hk
+      split at hk
+      · next fv av hf ha => exact ⟨fv, av, n, hf, ha, hk⟩
+      · contradiction
+
 /-- `Applies f x y` means `f x` reduces to `y` with some fuel. -/
 def Applies (f x y : Value) : Prop :=
   ∃ fuel, Value.apply fuel f x = some y
@@ -105,6 +132,20 @@ def Applies2 (f a b r : Value) : Prop :=
 
 def Applies3 (f a b c r : Value) : Prop :=
   ∃ fab, Applies2 f a b fab ∧ Applies fab c r
+
+theorem evals_app {f a : Tree} {fv av r : Value}
+    (hf : Evals f fv) (ha : Evals a av) (hr : Applies fv av r) :
+    Evals (f ⬝ a) r := by
+  obtain ⟨nf, hf⟩ := hf
+  obtain ⟨na, ha⟩ := ha
+  obtain ⟨nr, hr⟩ := hr
+  refine ⟨max nf (max na nr) + 1, ?_⟩
+  have hf' := eval_mono (Nat.le_max_left nf (max na nr)) hf
+  have ha' := eval_mono
+    (Nat.le_trans (Nat.le_max_left na nr) (Nat.le_max_right nf (max na nr))) ha
+  have hr' := apply_mono
+    (Nat.le_trans (Nat.le_max_right na nr) (Nat.le_max_right nf (max na nr))) hr
+  simp [eval, hf', ha', hr']
 
 theorem applies_leaf (y : Value) : Applies .leaf y (.stem y) :=
   ⟨1, rfl⟩
@@ -218,13 +259,13 @@ theorem ofNat_size (n : Nat) : (Value.ofNat n).size = n + 1 := by
 theorem size_pos (v : Value) : 0 < v.size := by
   cases v <;> simp [Value.size] <;> omega
 
-private theorem apply_leaf_of_pos (fuel : Nat) (x : Value) (h : 0 < fuel) :
+theorem apply_leaf_of_pos (fuel : Nat) (x : Value) (h : 0 < fuel) :
     Value.apply fuel .leaf x = some (.stem x) := by
   cases fuel with
   | zero => cases h
   | succ _ => rfl
 
-private theorem apply_stem_of_pos (fuel : Nat) (x y : Value) (h : 0 < fuel) :
+theorem apply_stem_of_pos (fuel : Nat) (x y : Value) (h : 0 < fuel) :
     Value.apply fuel (.stem x) y = some (.fork x y) := by
   cases fuel with
   | zero => cases h
@@ -292,6 +333,61 @@ theorem eval_ofNat (n fuel : Nat) (h : (n + 1) * 2 ≤ fuel) :
     rw [ofNat_size]; exact h
   exact eval_toTree (Value.ofNat n) fuel this
 
+theorem isProgram_isClosed {t : Tree} (h : t.isProgram = true) : t.isClosed = true := by
+  induction t with
+  | node => rfl
+  | ref => simp [Tree.isProgram] at h
+  | app f a ihf iha =>
+      cases f with
+      | node =>
+          simp [Tree.isProgram] at h
+          simp [Tree.isClosed, iha h]
+      | app f1 f2 =>
+          cases f1 with
+          | node =>
+              simp [Tree.isProgram, Bool.and_eq_true] at h
+              have hf2 : f2.isClosed = true := by
+                have : (△ ⬝ f2).isProgram = true := by simp [Tree.isProgram, h.1]
+                have := ihf this
+                simp [Tree.isClosed] at this
+                exact this
+              simp [Tree.isClosed, hf2, iha h.2]
+          | _ => simp [Tree.isProgram] at h
+      | ref => simp [Tree.isProgram] at h
+
+theorem evals_program {t : Tree} (h : t.isProgram = true) : ∃ v, Evals t v := by
+  induction t with
+  | node => exact ⟨.leaf, 1, rfl⟩
+  | ref => simp [Tree.isProgram] at h
+  | app f a ihf iha =>
+      cases f with
+      | node =>
+          simp [Tree.isProgram] at h
+          obtain ⟨av, ha⟩ := iha h
+          exact ⟨.stem av, evals_app ⟨1, rfl⟩ ha (applies_leaf av)⟩
+      | app f1 f2 =>
+          cases f1 with
+          | node =>
+              simp [Tree.isProgram, Bool.and_eq_true] at h
+              obtain ⟨fv, hf⟩ := ihf (by simp [Tree.isProgram]; exact h.1)
+              obtain ⟨av, ha⟩ := iha h.2
+              obtain ⟨leafv, f2v, n, hΔ, _, happ⟩ := evals_app_inv hf
+              have : leafv = .leaf := by
+                have hleaf : eval n △ = some .leaf := by
+                  cases n with
+                  | zero => exact rfl
+                  | succ _ => exact rfl
+                exact evals_det ⟨n, hΔ⟩ ⟨n, hleaf⟩
+              subst this
+              cases n with
+              | zero => simp [Value.apply] at happ
+              | succ n =>
+                  simp [Value.apply] at happ
+                  subst happ
+                  exact ⟨.fork f2v av, evals_app hf ha (applies_stem f2v av)⟩
+          | _ => simp [Tree.isProgram] at h
+      | ref => simp [Tree.isProgram] at h
+
 /-! ### Closed terms and substitution -/
 
 def onlyFree (x : String) : Tree → Bool
@@ -312,6 +408,24 @@ theorem substitute_not_occurs (x : String) (N M : Tree) :
       intro h
       simp [Tree.occurs, Bool.or_eq_false_iff] at h
       simp [Tree.substitute, ihf h.1, iha h.2]
+
+theorem isClosed_onlyFree (x : String) {t : Tree} (h : t.isClosed = true) :
+    onlyFree x t = true := by
+  induction t with
+  | node => rfl
+  | ref _ => simp [Tree.isClosed] at h
+  | app f a ihf iha =>
+      simp [Tree.isClosed, Bool.and_eq_true] at h
+      simp [onlyFree, ihf h.1, iha h.2]
+
+theorem occurs_closed (x : String) {t : Tree} (h : t.isClosed = true) :
+    Tree.occurs x t = false := by
+  induction t with
+  | node => rfl
+  | ref _ => simp [Tree.isClosed] at h
+  | app f a ihf iha =>
+      simp [Tree.isClosed, Bool.and_eq_true] at h
+      simp [Tree.occurs, ihf h.1, iha h.2]
 
 theorem occurs_onlyFree {x y : String} {M : Tree}
     (h : onlyFree x M = true) (hne : x ≠ y) : Tree.occurs y M = false := by

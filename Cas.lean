@@ -10,3 +10,5 @@ import Cas.Program
 import Cas.Kernel
 import Cas.Semantics
 import Cas.Arith
+import Cas.StarBeta
+import Cas.Fixpoint
