@@ -222,6 +222,7 @@ private def traceDone (t v : Tree) : Bool :=
 #guard tdiff.size > 0
 #guard tlookup.isProgram && tlookup.isClosed
 #guard (tsimp ()).isProgram && (tsimp ()).isClosed
+#guard (texpand ()).isProgram && (texpand ()).isClosed
 
 /-- Runtime checks for `teval` / `tdiff`. Returns `none` on success. -/
 def programSelfTest (_ : Unit := ()) : Option String :=
@@ -241,6 +242,13 @@ def programSelfTest (_ : Unit := ()) : Option String :=
     match parseExpr? s with
     | some e =>
         match kernelSimpExpr e with
+        | some d => some d.toString
+        | none   => some "<diverged>"
+    | none => some "<parse>"
+  let ke (s : String) : Option String :=
+    match parseExpr? s with
+    | some e =>
+        match kernelExpandExpr e with
         | some d => some d.toString
         | none   => some "<diverged>"
     | none => some "<parse>"
@@ -300,6 +308,10 @@ def programSelfTest (_ : Unit := ()) : Option String :=
     , expect "tsimp --x" (ks "--x") (some "x")
     , expect "tsimp x-x" (ks "x-x") (some "0")
     , expect "tsimp 2+3" (ks "2+3") (some "5")
+    , expect "texpand (x+1)*x" (ke "(x+1)*x") (some "x * x + x")
+    , expect "texpand x*(y+1)" (ke "x*(y+1)") (some "x * y + x")
+    , expect "texpand (x+1)*(x-1)" (ke "(x+1)*(x-1)") (some "x * x - x + x - 1")
+    , expect "texpand -(x+1)" (ke "-(x+1)") (some "-x - 1")
     , if ev "(x+1)*(x+2)" 3 == some 20 then none else some "teval (x+1)*(x+2) @ 3"
     , let eqv := eval! tequal
       if kernelEqual eqv eqv == some true then none else some "equal equal equal"

@@ -17,6 +17,7 @@ import Cas.Diff
 import Cas.Bracket
 import Cas.Program
 import Cas.Simp
+import Cas.Expand
 
 namespace Cas
 
@@ -403,6 +404,28 @@ def kernelSimpExpr (e : Expr) : Option Expr :=
   | some v => Expr.decode v
   | none   => none
 
+/-- Reduce `texpand ⬝ e` (one distribute pass). -/
+def kernelExpand (e : Value) (fuel : Nat := Value.defaultFuel) : Option Value :=
+  run1 (texpand ()) e fuel
+
+/-- Iterate `texpand` until a fixpoint or `fuel` passes. -/
+def kernelExpandN (e : Value) (fuel : Nat := 16) : Option Value :=
+  match fuel with
+  | 0 => some e
+  | n + 1 =>
+      match kernelExpand e with
+      | none => none
+      | some e' =>
+          if e' == e then some e else kernelExpandN e' n
+
+def kernelExpandExpr (e : Expr) : Option Expr :=
+  match kernelExpandN (Expr.encode e) with
+  | some v =>
+      match kernelSimpN v with
+      | some v' => Expr.decode v'
+      | none => Expr.decode v
+  | none => none
+
 def kernelDiffExpr (e : Expr) (x : String := "x") : Option Expr :=
   match kernelDiff (Expr.encode e) (Expr.encodeString x) with
   | some v =>
@@ -448,6 +471,7 @@ def rdivProgram (_ : Unit := ()) : Tree := trDiv ()
 def evalProgram : Unit → Tree := fun _ => teval ()
 def diffProgram : Tree := tdiff
 def simpProgram (_ : Unit := ()) : Tree := tsimp ()
+def expandProgram (_ : Unit := ()) : Tree := texpand ()
 
 def describeKernel : String :=
   "tree-calculus kernel\n\
@@ -460,6 +484,7 @@ def describeKernel : String :=
    eval     Y2 + nested triage; env is a list of (name, ofRat)\n\
    diff     Y2 + nested triage; tdiff e name, name compared intensionally\n\
    simp     Y2 + nested triage; one bottom-up rewrite pass\n\
+   expand   Y2 + nested triage; distribute * over + and neg over +\n\
    equal    Y2 + nested triage on both arguments (intensional)\n\
    size     Y2 + triage {1, λx. succ (size x), λx y. succ (size x + size y)}\n\
    binary   0 = △, 2k = △ △ k, 2k+1 = △ (△ △) k  (LSB first)\n\
