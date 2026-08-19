@@ -148,6 +148,12 @@ def toNatBin? (v : Value) : Option Nat := Value.toBin? v
 def encodeString (s : String) : Value :=
   Value.ofList (s.toList.map (fun c => ofNatBin c.toNat))
 
+/-- Association list `△ ⟨⌜name⌝, ⌜n⌝⟩ rest` for `teval`. -/
+def encodeEnv : Env → Value
+  | [] => .leaf
+  | (k, n) :: rest =>
+      .fork (.fork (encodeString k) (Value.ofRat n 1)) (encodeEnv rest)
+
 partial def decodeString? : Value → Option String
   | v =>
     match v.toList? with

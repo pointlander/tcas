@@ -220,6 +220,7 @@ private def traceDone (t v : Tree) : Bool :=
 #guard (eval! (Tm.compile (Tm.lam "x" (Tm.embed I ◃ Tm.v "x")) ⬝ △)).toTree == △
 #guard (teval ()).size > 0
 #guard tdiff.size > 0
+#guard tlookup.isProgram && tlookup.isClosed
 #guard (tsimp ()).isProgram && (tsimp ()).isClosed
 
 /-- Runtime checks for `teval` / `tdiff`. Returns `none` on success. -/
@@ -282,6 +283,17 @@ def programSelfTest (_ : Unit := ()) : Option String :=
     , if ev "y" 5 == none then none else some "teval y @ 5 (unbound)"
     , if kernelEvalRat 3 (parseExpr? "sin(x)" |>.getD (.const 0)) == none
       then none else some "teval sin(x) @ 3"
+    , if kernelEvalEnv [("x", 2), ("y", 3)]
+          (parseExpr? "x+y" |>.getD (.const 0)) == some (5, 1)
+      then none else some "teval x+y @ x=2 y=3"
+    , if kernelEvalEnv [("x", 2), ("y", 3)]
+          (parseExpr? "x*y+1" |>.getD (.const 0)) == some (7, 1)
+      then none else some "teval x*y+1 @ x=2 y=3"
+    , if kernelEvalEnv [("y", 3)]
+          (parseExpr? "x+y" |>.getD (.const 0)) == none
+      then none else some "teval x+y @ y=3 (x unbound)"
+    , if kernelEvalEnv [] (parseExpr? "2+3" |>.getD (.const 0)) == some (5, 1)
+      then none else some "teval 2+3 @ {}"
     , expect "tsimp 0+x" (ks "0+x") (some "x")
     , expect "tsimp x*1" (ks "x*1") (some "x")
     , expect "tsimp x^1" (ks "x^1") (some "x")

@@ -135,6 +135,28 @@ def tequal : Tree :=
                    ⬝ (.ref "eq" ⬝ .ref "x2" ⬝ .ref "y2"))))))))
       ⬝ .ref "x"))
 
+/-- Lookup `name` in a list of pairs `△ ⟨name, val⟩ rest`. Missing → `△`. -/
+def tlookup : Tree :=
+  Y2 <| Tm.compile <|
+    let q (t : Tree) : Tm := .embed t
+    open Tm in
+    lam "env" <|
+      Tm.triage
+        (lam "look" (lam "name" Tm.node))
+        (lam "_" (lam "look" (lam "name" Tm.node)))
+        (lam "pair" <| lam "rest" <| lam "look" <| lam "name" <|
+          Tm.triage
+            Tm.node
+            (lam "_" Tm.node)
+            (lam "n" <| lam "r" <|
+              Tm.triage
+                (v "look" ◃ v "rest" ◃ v "name")
+                (lam "_" (v "r"))
+                (lam "_" (lam "_" (v "look" ◃ v "rest" ◃ v "name")))
+                (q tequal ◃ v "n" ◃ v "name"))
+            (v "pair"))
+        (v "env")
+
 /-- `plus = Y2 (λm plus n. triage { n, λm₁. succ (plus m₁ n), λ_ _. n } m)` -/
 def tplus : Tree :=
   Y2 (star "m" (star "plus" (star "n"

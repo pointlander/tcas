@@ -146,9 +146,16 @@ def liftInt (v : Value) : Value :=
       | some n => Value.ofRat (Int.ofNat n) 1
       | none => Value.ofRat 0 1
 
+/-- First matching `△ ⟨name, val⟩` in an association list. -/
+partial def lookupEnv (name env : Value) : Option Value :=
+  match env with
+  | .fork (.fork n r) rest =>
+      if Value.equalV n name then some r else lookupEnv name rest
+  | _ => none
+
 /-- Lean-side intensional walker; the specification of `teval`.
     Results are reduced rationals (`Value.ofRat`). -/
-partial def walkEval (x : Value) (e : Value) : Option Value :=
+partial def walkEval (env : Value) (e : Value) : Option Value :=
   match e with
   | .fork tag payload =>
       match tag.toNat? with
@@ -156,28 +163,25 @@ partial def walkEval (x : Value) (e : Value) : Option Value :=
           -- const: payload is an `ofInt`; lift to `p/1`
           some (liftInt payload)
       | some 1 =>
-          -- only the variable `x` is bound to the numeric input
-          match Expr.decodeString? payload with
-          | some "x" => some (liftInt x)
-          | _ => none
+          lookupEnv payload env
       | some 2 =>
           match payload with
           | .fork a b =>
-              match walkEval x a, walkEval x b with
+              match walkEval env a, walkEval env b with
               | some va, some vb => some (plusRatV va vb)
               | _, _ => none
           | _ => none
       | some 3 =>
           match payload with
           | .fork a b =>
-              match walkEval x a, walkEval x b with
+              match walkEval env a, walkEval env b with
               | some va, some vb => some (mulRatV va vb)
               | _, _ => none
           | _ => none
       | some 4 =>
           match payload with
           | .fork a b =>
-              match walkEval x a, walkEval x b with
+              match walkEval env a, walkEval env b with
               | some va, some vb =>
                   match va.toRat?, vb.toRat? with
                   | some (p, q), some (e, 1) =>
@@ -188,11 +192,11 @@ partial def walkEval (x : Value) (e : Value) : Option Value :=
               | _, _ => none
           | _ => none
       | some 5 =>
-          match walkEval x payload with
+          match walkEval env payload with
           | some v => some (negRatV v)
           | none => none
       | some 6 =>
-          match walkEval x payload with
+          match walkEval env payload with
           | some v => some (invRatV v)
           | none => none
       | _ => none
@@ -205,16 +209,19 @@ def reduceRat (v : Value) : Option Value :=
   | some (p, q) => some (Value.ofRat p q)
   | none => none
 
-/-- Reduce `teval ⬝ e ⬝ x`, then cancel the resulting fraction. -/
-def kernelEval (x e : Value) (fuel : Nat := Value.defaultFuel) : Option Value :=
-  match run2 (teval ()) e x fuel with
+/-- Reduce `teval ⬝ e ⬝ env`, then cancel the resulting fraction. -/
+def kernelEval (e env : Value) (fuel : Nat := Value.defaultFuel) : Option Value :=
+  match run2 (teval ()) e env fuel with
   | some v => reduceRat v
   | none => none
 
-def kernelEvalRat (x : Nat) (e : Expr) : Option (Int × Nat) :=
-  match kernelEval (Value.ofBin x) (Expr.encode e) with
+def kernelEvalEnv (env : Expr.Env) (e : Expr) : Option (Int × Nat) :=
+  match kernelEval (Expr.encode e) (Expr.encodeEnv env) with
   | some v => v.toRat?
   | none   => none
+
+def kernelEvalRat (x : Nat) (e : Expr) : Option (Int × Nat) :=
+  kernelEvalEnv [("x", Int.ofNat x)] e
 
 def kernelEvalInt (x : Nat) (e : Expr) : Option Int :=
   match kernelEvalRat x e with
@@ -416,6 +423,7 @@ def predProgram : Tree := tpred
 def isZeroProgram : Tree := tisZero
 def notProgram : Tree := tnot
 def equalProgram : Tree := tequal
+def lookupProgram : Tree := tlookup
 def sizeProgram : Tree := tsize
 def bsuccProgram : Tree := tbSucc
 def bpredProgram : Tree := tbPred
@@ -449,7 +457,7 @@ def describeKernel : String :=
    times    Y2 (λn t m. triage {0, λn₁. plus m (t n₁ m), λ_ _. 0} n)\n\
    pow      Y2 (λe p b. triage {1, λe₁. times b (p e₁ b), λ_ _. 1} e)\n\
    expr     △ ⟨ctor⟩ ⟨payload⟩   ctor = stem-chain index\n\
-   eval     Y2 + nested triage; plus/times/pow for arithmetic\n\
+   eval     Y2 + nested triage; env is a list of (name, ofRat)\n\
    diff     Y2 + nested triage; tdiff e name, name compared intensionally\n\
    simp     Y2 + nested triage; one bottom-up rewrite pass\n\
    equal    Y2 + nested triage on both arguments (intensional)\n\

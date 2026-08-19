@@ -56,8 +56,9 @@ recursor is applied, then `plus` / `times` / `pow` do the arithmetic
 and `tsimp` rewrites the encoded tree.
 
 ```
-teval ⬝ ⌜x^2+1⌝ ⬝ ⌜3⌝  →*  ⌜10⌝
-tdiff ⬝ ⌜x^2⌝ ⬝ ⌜x⌝    →*  ⌜2x⌝
+teval ⬝ ⌜x^2+1⌝ ⬝ ⌜[x=3]⌝     →*  ⌜10⌝
+teval ⬝ ⌜x+y⌝ ⬝ ⌜[x=2,y=3]⌝   →*  ⌜5⌝
+tdiff ⬝ ⌜x^2⌝ ⬝ ⌜x⌝           →*  ⌜2x⌝
 ```
 
 `tequal` is Jay’s intensional equality as a tree program: a `Y2` of
@@ -144,6 +145,7 @@ lake exe cas rat inv 2/3
 lake exe cas kernel-eval "x^2+1" x=3
 lake exe cas kernel-eval "1/2+1/3" x=0
 lake exe cas kernel-eval "1/x" x=4
+lake exe cas kernel-eval "x+y" x=2 y=3
 lake exe cas kernel-diff "x^2 + sin(x)"
 lake exe cas kernel-diff "x+y" x
 lake exe cas kernel-diff "x+y" y

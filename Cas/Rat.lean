@@ -52,7 +52,7 @@ def tintToRat : Tree :=
 /-- Rational negation: flip the numerator's sign. -/
 def trNeg : Tree :=
   star "r" (
-    triage trat0 (K ⬝ trat0)
+    triage △ (K ⬝ △)
       (star "num" (star "den" (
         △ ⬝ (tiNeg ⬝ .ref "num") ⬝ .ref "den")))
       ⬝ .ref "r")
@@ -61,11 +61,11 @@ def trNeg : Tree :=
 def trInv (_ : Unit := ()) : Tree :=
   Tm.compile <|
     lam "r" <|
-      Tm.triage (q trat0) (lam "_" (q trat0))
+      Tm.triage Tm.node (lam "_" Tm.node)
         (lam "num" <| lam "den" <|
-          Tm.triage (q trat0) (lam "_" (q trat0))
+          Tm.triage Tm.node (lam "_" Tm.node)
             (lam "s" <| lam "m" <|
-              Tm.triage (q trat0) (lam "_" (q trat0))
+              Tm.triage Tm.node (lam "_" Tm.node)
                 (lam "_" (lam "_"
                   (Tm.node ◃ (Tm.node ◃ v "s" ◃ v "den") ◃ v "m")))
                 (v "m"))
@@ -79,9 +79,9 @@ private def tpos (m : Tm) : Tm := Tm.node ◃ Tm.node ◃ m
 def trPlus (_ : Unit := ()) : Tree :=
   Tm.compile <|
     lam "a" <| lam "b" <|
-      Tm.triage (q trat0) (lam "_" (q trat0))
+      Tm.triage Tm.node (lam "_" Tm.node)
         (lam "n1" <| lam "d1" <|
-          Tm.triage (q trat0) (lam "_" (q trat0))
+          Tm.triage Tm.node (lam "_" Tm.node)
             (lam "n2" <| lam "d2" <|
               Tm.node
                 ◃ (q tiPlus
@@ -99,9 +99,9 @@ def trMinus (_ : Unit := ()) : Tree :=
 def trTimes (_ : Unit := ()) : Tree :=
   Tm.compile <|
     lam "a" <| lam "b" <|
-      Tm.triage (q trat0) (lam "_" (q trat0))
+      Tm.triage Tm.node (lam "_" Tm.node)
         (lam "n1" <| lam "d1" <|
-          Tm.triage (q trat0) (lam "_" (q trat0))
+          Tm.triage Tm.node (lam "_" Tm.node)
             (lam "n2" <| lam "d2" <|
               Tm.node
                 ◃ (q tiTimes ◃ v "n1" ◃ v "n2")

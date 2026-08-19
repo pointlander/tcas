@@ -20,8 +20,8 @@ def usage : String :=
      cas reduce <tree>       reduce a tree-calculus term\n\
      cas trace <tree> [n]    show each of the five rules (at most n steps)\n\
      cas arith <n> +|*|^ <m> natural arithmetic via tree reduction\n\
-     cas kernel-eval <expr> x=<n>\n\
-                             evaluate by tree reduction (ℚ)\n\
+     cas kernel-eval <expr> [x=n y=m …]\n\
+                             evaluate by tree reduction (ℚ, env of names)\n\
      cas kernel-diff <expr> [var]\n\
                              differentiate the encoded tree wrt var (default x), then tsimp\n\
      cas kernel-simp <expr>  rewrite the encoded tree (tsimp)\n\
@@ -192,6 +192,7 @@ def kernelNamed : String → Option Tree
   | "pred"  => some predProgram
   | "not"   => some notProgram
   | "equal" => some equalProgram
+  | "lookup" => some lookupProgram
   | "size"  => some sizeProgram
   | "minus" => some minusProgram
   | "ineg"  => some inegProgram
@@ -512,16 +513,11 @@ def main (args : List String) : IO UInt32 := do
           match parseEnv rest with
           | .error m => fail m
           | .ok env =>
-              match Expr.lookup "x" env <|> env.head?.map (·.snd) with
-              | none => fail "kernel-eval needs x=<nat>"
-              | some xv =>
-                  if xv < 0 then fail "kernel-eval expects a natural x"
-                  else
-                    match kernelEvalRat xv.toNat e with
-                    | some (p, q) =>
-                        IO.println (Value.formatRat p q)
-                        return 0
-                    | none => fail "kernel-eval could not evaluate the encoded tree"
+              match kernelEvalEnv env e with
+              | some (p, q) =>
+                  IO.println (Value.formatRat p q)
+                  return 0
+              | none => fail "kernel-eval could not evaluate the encoded tree"
   | "kernel-diff" :: rest =>
       match needExpr rest with
       | .error m => fail m

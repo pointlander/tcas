@@ -6,8 +6,8 @@
   is applied, so eager `S` does not copy the recursor into unused
   constructor cases.
 
-    teval ⬝ ⌜e⌝ ⬝ ⌜n⌝  →*  ⌜e(n)⌝     (only the variable `x` is bound)
-    tdiff ⬝ ⌜e⌝ ⬝ ⌜x⌝  →*  ⌜∂e/∂x⌝
+    teval ⬝ ⌜e⌝ ⬝ ⌜env⌝ →*  ⌜e(env)⌝   (env = list of (name, ofRat))
+    tdiff ⬝ ⌜e⌝ ⬝ ⌜x⌝   →*  ⌜∂e/∂x⌝
 -/
 
 import Cas.Bracket
@@ -78,42 +78,36 @@ end P
 
 /-! ### `teval`
 
-  `dispatchEval e` is a function `λrec x. …` for the constructor of `e`.
+  `dispatchEval e` is a function `λrec env. …` for the constructor of `e`.
   `Y2` then feeds that function the recursor:
 
-    teval e x = dispatchEval e teval x
+    teval e env = dispatchEval e teval env
 -/
 
-private def ev (e : Tm) : Tm := P.v "rec" ◃ e ◃ P.v "x"
+private def ev (e : Tm) : Tm := P.v "rec" ◃ e ◃ P.v "env"
 
-/-- `λrec x. 0/1` -/
-private def evalK0 : Tm := P.lam "rec" (P.lam "x" (P.q trat0))
+/-- `λrec env. 0/1` -/
+private def evalK0 : Tm := P.lam "rec" (P.lam "env" (P.q trat0))
 
 /-- A constant is an `ofInt`; lift it to a rational with denominator `1`. -/
 private def evalConst (payload : Tm) : Tm :=
-  P.lam "rec" (P.lam "x" (P.q tintToRat ◃ payload))
+  P.lam "rec" (P.lam "env" (P.q tintToRat ◃ payload))
 
-/-- The input is a binary nat bound to the variable `x`; any other
-    name is stuck (not a rational). -/
+/-- Look up the variable's encoded name in `env`. Missing → stuck. -/
 private def evalVar (payload : Tm) : Tm :=
-  P.lam "rec" (P.lam "x"
-    (Tm.triage
-      Tm.node
-      (P.lam "_" (P.q tintToRat ◃ (Tm.node ◃ Tm.node ◃ P.v "x")))
-      (P.lam "_" (P.lam "_" Tm.node))
-      (P.q tequal ◃ payload ◃ P.q (Expr.encodeString "x").toTree)))
+  P.lam "rec" (P.lam "env" (P.q tlookup ◃ P.v "env" ◃ payload))
 
 /-- Non-numeric constructors (`sin`, `cos`, …) and unknown names. -/
-private def evalStuck : Tm := P.lam "rec" (P.lam "x" Tm.node)
+private def evalStuck : Tm := P.lam "rec" (P.lam "env" Tm.node)
 
 private def evalAdd (payload : Tm) : Tm :=
-  P.lam "rec" (P.lam "x"
-    (P.onPair payload (P.q trat0) fun a b =>
+  P.lam "rec" (P.lam "env"
+    (P.onPair payload Tm.node fun a b =>
       P.q (trPlus ()) ◃ ev a ◃ ev b))
 
 private def evalMul (payload : Tm) : Tm :=
-  P.lam "rec" (P.lam "x"
-    (P.onPair payload (P.q trat0) fun a b =>
+  P.lam "rec" (P.lam "env"
+    (P.onPair payload Tm.node fun a b =>
       P.q (trTimes ()) ◃ ev a ◃ ev b))
 
 /-- Magnitude of an `ofInt`; `0` if the value is not a fork. -/
@@ -149,8 +143,8 @@ private def evalPowInt (va bnum : Tm) : Tm :=
 /-- Integer (or reciprocal) power of a rational; non-unit denominators on
     the exponent yield `0/1`. -/
 private def evalPow (payload : Tm) : Tm :=
-  P.lam "rec" (P.lam "x"
-    (P.onPair payload (P.q trat0) fun a b =>
+  P.lam "rec" (P.lam "env"
+    (P.onPair payload Tm.node fun a b =>
       Tm.triage (P.q trat0) (P.lam "_" (P.q trat0))
         (P.lam "bnum" (P.lam "bden"
           (Tm.triage (P.q trat0) (P.lam "_" (P.q trat0))
@@ -167,10 +161,10 @@ private def evalPow (payload : Tm) : Tm :=
         (ev b)))
 
 private def evalNeg (payload : Tm) : Tm :=
-  P.lam "rec" (P.lam "x" (P.q trNeg ◃ ev payload))
+  P.lam "rec" (P.lam "env" (P.q trNeg ◃ ev payload))
 
 private def evalInv (payload : Tm) : Tm :=
-  P.lam "rec" (P.lam "x" (P.q (trInv ()) ◃ ev payload))
+  P.lam "rec" (P.lam "env" (P.q (trInv ()) ◃ ev payload))
 
 /-- `rest` is the tag with the first stem peeled off (ctor ≥ 1). -/
 private def evalFrom1 (rest payload : Tm) : Tm :=
