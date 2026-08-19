@@ -156,8 +156,10 @@ partial def walkEval (x : Value) (e : Value) : Option Value :=
           -- const: payload is an `ofInt`; lift to `p/1`
           some (liftInt payload)
       | some 1 =>
-          -- var: pack the binary input as `+x/1`
-          some (liftInt x)
+          -- only the variable `x` is bound to the numeric input
+          match Expr.decodeString? payload with
+          | some "x" => some (liftInt x)
+          | _ => none
       | some 2 =>
           match payload with
           | .fork a b =>
@@ -201,7 +203,7 @@ partial def walkEval (x : Value) (e : Value) : Option Value :=
 def reduceRat (v : Value) : Option Value :=
   match v.toRat? with
   | some (p, q) => some (Value.ofRat p q)
-  | none => some (Value.ofRat 0 1)
+  | none => none
 
 /-- Reduce `teval ⬝ e ⬝ x`, then cancel the resulting fraction. -/
 def kernelEval (x e : Value) (fuel : Nat := Value.defaultFuel) : Option Value :=
@@ -270,28 +272,28 @@ def kernelRInv (a : Value) : Option Value :=
   | none => none
 
 /-- Lean-side intensional walker; the specification of `tdiff`. -/
-partial def walkDiff : Value → Option Value
+partial def walkDiff (var : Value) : Value → Option Value
   | .fork tag payload =>
       match tag.toNat? with
       | some 0 =>
-          -- d/dx const = 0
           some (Expr.encode (.const 0))
       | some 1 =>
-          -- d/dx var = 1
-          some (Expr.encode (.const 1))
+          if Value.equalV payload var then
+            some (Expr.encode (.const 1))
+          else
+            some (Expr.encode (.const 0))
       | some 2 =>
           match payload with
           | .fork a b =>
-              match walkDiff a, walkDiff b with
+              match walkDiff var a, walkDiff var b with
               | some da, some db =>
                   some (Expr.tagged 2 (.fork da db))
               | _, _ => none
           | _ => none
       | some 3 =>
-          -- (uv)' = u'v + uv'
           match payload with
           | .fork a b =>
-              match walkDiff a, walkDiff b with
+              match walkDiff var a, walkDiff var b with
               | some da, some db =>
                   let left  := Expr.tagged 3 (.fork da b)
                   let right := Expr.tagged 3 (.fork a db)
@@ -299,7 +301,6 @@ partial def walkDiff : Value → Option Value
               | _, _ => none
           | _ => none
       | some 4 =>
-          -- (u^n)' = n * u^(n-1) * u'   when n is a constant nat
           match payload with
           | .fork a b =>
               match b with
@@ -308,7 +309,7 @@ partial def walkDiff : Value → Option Value
                   | some 0 =>
                       match bp with
                       | .fork .leaf mag =>
-                          match mag.toBin?, walkDiff a with
+                          match mag.toBin?, walkDiff var a with
                           | some n, some da =>
                               let nE   := Expr.encode (.const (Int.ofNat n))
                               let nm1  := Expr.encode (.const (Int.ofNat (n - 1)))
@@ -318,8 +319,7 @@ partial def walkDiff : Value → Option Value
                           | _, _ => none
                       | _ => none
                   | _ =>
-                      -- non-constant exponent: a^b · (b' ln a + b · a'/a)
-                      match walkDiff a, walkDiff b with
+                      match walkDiff var a, walkDiff var b with
                       | some da, some db =>
                           let lnA  := Expr.tagged 10 a
                           let invA := Expr.tagged 6 a
@@ -333,12 +333,11 @@ partial def walkDiff : Value → Option Value
               | _ => none
           | _ => none
       | some 5 =>
-          match walkDiff payload with
+          match walkDiff var payload with
           | some da => some (Expr.tagged 5 da)
           | none    => none
       | some 6 =>
-          -- (1/u)' = -u' / u^2
-          match walkDiff payload with
+          match walkDiff var payload with
           | some da =>
               let u2   := Expr.tagged 4 (.fork payload (Expr.encode (.const 2)))
               let inv  := Expr.tagged 6 u2
@@ -346,26 +345,26 @@ partial def walkDiff : Value → Option Value
               some (Expr.tagged 5 prod)
           | none => none
       | some 7 =>
-          match walkDiff payload with
+          match walkDiff var payload with
           | some da =>
               let c := Expr.tagged 8 payload
               some (Expr.tagged 3 (.fork c da))
           | none => none
       | some 8 =>
-          match walkDiff payload with
+          match walkDiff var payload with
           | some da =>
               let s := Expr.tagged 7 payload
               let p := Expr.tagged 3 (.fork s da)
               some (Expr.tagged 5 p)
           | none => none
       | some 9 =>
-          match walkDiff payload with
+          match walkDiff var payload with
           | some da =>
               let e := Expr.tagged 9 payload
               some (Expr.tagged 3 (.fork e da))
           | none => none
       | some 10 =>
-          match walkDiff payload with
+          match walkDiff var payload with
           | some da =>
               let inv := Expr.tagged 6 payload
               some (Expr.tagged 3 (.fork da inv))
@@ -373,9 +372,10 @@ partial def walkDiff : Value → Option Value
       | _ => none
   | _ => none
 
-/-- Reduce `tdiff ⬝ e`. -/
-def kernelDiff (e : Value) (fuel : Nat := Value.defaultFuel) : Option Value :=
-  run1 tdiff e fuel
+/-- Reduce `tdiff ⬝ e ⬝ ⌜name⌝`. -/
+def kernelDiff (e : Value) (var : Value := Expr.encodeString "x")
+    (fuel : Nat := Value.defaultFuel) : Option Value :=
+  run2 tdiff e var fuel
 
 /-- Reduce `tsimp ⬝ e` (one bottom-up rewrite pass). -/
 def kernelSimp (e : Value) (fuel : Nat := Value.defaultFuel) : Option Value :=
@@ -396,8 +396,8 @@ def kernelSimpExpr (e : Expr) : Option Expr :=
   | some v => Expr.decode v
   | none   => none
 
-def kernelDiffExpr (e : Expr) : Option Expr :=
-  match kernelDiff (Expr.encode e) with
+def kernelDiffExpr (e : Expr) (x : String := "x") : Option Expr :=
+  match kernelDiff (Expr.encode e) (Expr.encodeString x) with
   | some v =>
       match kernelSimpN v with
       | some v' => Expr.decode v'
@@ -450,7 +450,7 @@ def describeKernel : String :=
    pow      Y2 (λe p b. triage {1, λe₁. times b (p e₁ b), λ_ _. 1} e)\n\
    expr     △ ⟨ctor⟩ ⟨payload⟩   ctor = stem-chain index\n\
    eval     Y2 + nested triage; plus/times/pow for arithmetic\n\
-   diff     Y2 + nested triage; result is an encoded expression\n\
+   diff     Y2 + nested triage; tdiff e name, name compared intensionally\n\
    simp     Y2 + nested triage; one bottom-up rewrite pass\n\
    equal    Y2 + nested triage on both arguments (intensional)\n\
    size     Y2 + triage {1, λx. succ (size x), λx y. succ (size x + size y)}\n\

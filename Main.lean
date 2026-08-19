@@ -22,7 +22,8 @@ def usage : String :=
      cas arith <n> +|*|^ <m> natural arithmetic via tree reduction\n\
      cas kernel-eval <expr> x=<n>\n\
                              evaluate by tree reduction (ℚ)\n\
-     cas kernel-diff <expr>  differentiate the encoded tree, then tsimp\n\
+     cas kernel-diff <expr> [var]\n\
+                             differentiate the encoded tree wrt var (default x), then tsimp\n\
      cas kernel-simp <expr>  rewrite the encoded tree (tsimp)\n\
      cas equal <t1> <t2>     intensional equality of two tree programs\n\
      cas size <tree>         count nodes of a tree program\n\
@@ -524,8 +525,9 @@ def main (args : List String) : IO UInt32 := do
   | "kernel-diff" :: rest =>
       match needExpr rest with
       | .error m => fail m
-      | .ok (e, _) =>
-          match kernelDiffExpr e with
+      | .ok (e, rest) =>
+          let x := match rest with | v :: _ => v | [] => "x"
+          match kernelDiffExpr e x with
           | some d => printResult d
           | none   => fail "kernel-diff could not analyse the encoded tree"
   | "kernel-simp" :: rest =>

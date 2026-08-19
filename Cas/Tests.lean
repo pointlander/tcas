@@ -228,13 +228,14 @@ def programSelfTest (_ : Unit := ()) : Option String :=
     match parseExpr? s with
     | some e => kernelEvalExpr n e
     | none   => none
-  let kd (s : String) : Option String :=
+  let kdAt (s var : String) : Option String :=
     match parseExpr? s with
     | some e =>
-        match kernelDiffExpr e with
+        match kernelDiffExpr e var with
         | some d => some d.toString
         | none   => some "<diverged>"
     | none => some "<parse>"
+  let kd (s : String) : Option String := kdAt s "x"
   let ks (s : String) : Option String :=
     match parseExpr? s with
     | some e =>
@@ -275,6 +276,12 @@ def programSelfTest (_ : Unit := ()) : Option String :=
     , expect "tdiff cos(x)" (kd "cos(x)") (some "-sin(x)")
     , expect "tdiff exp(x)" (kd "exp(x)") (some "exp(x)")
     , expect "tdiff ln(x)" (kd "ln(x)") (some "1 / x")
+    , expect "tdiff y" (kd "y") (some "0")
+    , expect "tdiff y wrt y" (kdAt "y" "y") (some "1")
+    , expect "tdiff x+y" (kd "x+y") (some "1")
+    , if ev "y" 5 == none then none else some "teval y @ 5 (unbound)"
+    , if kernelEvalRat 3 (parseExpr? "sin(x)" |>.getD (.const 0)) == none
+      then none else some "teval sin(x) @ 3"
     , expect "tsimp 0+x" (ks "0+x") (some "x")
     , expect "tsimp x*1" (ks "x*1") (some "x")
     , expect "tsimp x^1" (ks "x^1") (some "x")

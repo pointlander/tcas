@@ -6,8 +6,8 @@
   is applied, so eager `S` does not copy the recursor into unused
   constructor cases.
 
-    teval ⬝ ⌜e⌝ ⬝ ⌜n⌝  →*  ⌜e(n)⌝
-    tdiff ⬝ ⌜e⌝        →*  ⌜∂e/∂x⌝
+    teval ⬝ ⌜e⌝ ⬝ ⌜n⌝  →*  ⌜e(n)⌝     (only the variable `x` is bound)
+    tdiff ⬝ ⌜e⌝ ⬝ ⌜x⌝  →*  ⌜∂e/∂x⌝
 -/
 
 import Cas.Bracket
@@ -93,9 +93,18 @@ private def evalK0 : Tm := P.lam "rec" (P.lam "x" (P.q trat0))
 private def evalConst (payload : Tm) : Tm :=
   P.lam "rec" (P.lam "x" (P.q tintToRat ◃ payload))
 
-/-- The input `x` is a binary nat; pack it as `+x/1`. -/
-private def evalVar : Tm :=
-  P.lam "rec" (P.lam "x" (P.q tintToRat ◃ (Tm.node ◃ Tm.node ◃ P.v "x")))
+/-- The input is a binary nat bound to the variable `x`; any other
+    name is stuck (not a rational). -/
+private def evalVar (payload : Tm) : Tm :=
+  P.lam "rec" (P.lam "x"
+    (Tm.triage
+      Tm.node
+      (P.lam "_" (P.q tintToRat ◃ (Tm.node ◃ Tm.node ◃ P.v "x")))
+      (P.lam "_" (P.lam "_" Tm.node))
+      (P.q tequal ◃ payload ◃ P.q (Expr.encodeString "x").toTree)))
+
+/-- Non-numeric constructors (`sin`, `cos`, …) and unknown names. -/
+private def evalStuck : Tm := P.lam "rec" (P.lam "x" Tm.node)
 
 private def evalAdd (payload : Tm) : Tm :=
   P.lam "rec" (P.lam "x"
@@ -166,7 +175,7 @@ private def evalInv (payload : Tm) : Tm :=
 /-- `rest` is the tag with the first stem peeled off (ctor ≥ 1). -/
 private def evalFrom1 (rest payload : Tm) : Tm :=
   Tm.triage
-    evalVar
+    (evalVar payload)
     (P.lam "t"
       (Tm.triage
         (evalAdd payload)
@@ -182,18 +191,38 @@ private def evalFrom1 (rest payload : Tm) : Tm :=
                     (P.lam "t"
                       (Tm.triage
                         (evalInv payload)
-                        (P.lam "_" evalK0)
-                        (P.lam "_" (P.lam "_" evalK0))
+                        (P.lam "t"
+                          (Tm.triage
+                            evalStuck
+                            (P.lam "t"
+                              (Tm.triage
+                                evalStuck
+                                (P.lam "t"
+                                  (Tm.triage
+                                    evalStuck
+                                    (P.lam "t"
+                                      (Tm.triage
+                                        evalStuck
+                                        (P.lam "_" evalStuck)
+                                        (P.lam "_" (P.lam "_" evalStuck))
+                                        (P.v "t")))
+                                    (P.lam "_" (P.lam "_" evalStuck))
+                                    (P.v "t")))
+                                (P.lam "_" (P.lam "_" evalStuck))
+                                (P.v "t")))
+                            (P.lam "_" (P.lam "_" evalStuck))
+                            (P.v "t")))
+                        (P.lam "_" (P.lam "_" evalStuck))
                         (P.v "t")))
-                    (P.lam "_" (P.lam "_" evalK0))
+                    (P.lam "_" (P.lam "_" evalStuck))
                     (P.v "t")))
-                (P.lam "_" (P.lam "_" evalK0))
+                (P.lam "_" (P.lam "_" evalStuck))
                 (P.v "t")))
-            (P.lam "_" (P.lam "_" evalK0))
+            (P.lam "_" (P.lam "_" evalStuck))
             (P.v "t")))
-        (P.lam "_" (P.lam "_" evalK0))
+        (P.lam "_" (P.lam "_" evalStuck))
         (P.v "t")))
-    (P.lam "_" (P.lam "_" evalK0))
+    (P.lam "_" (P.lam "_" evalStuck))
     rest
 
 private def evalFork (_ : Unit := ()) : Tm :=
@@ -214,33 +243,38 @@ def teval (_ : Unit := ()) : Tree := Y2 (Tm.compile (dispatchEval ()))
 
 /-! ### `tdiff`
 
-  Unary: `tdiff e = dispatchDiff e tdiff`, and each case is `λd. …`.
+  `tdiff e v = dispatchDiff e tdiff v`. Each case is `λd name. …`.
+  A variable differentiates to `1` iff its encoded name equals `name`.
 -/
 
-private def dc (e : Tm) : Tm := P.v "d" ◃ e
+private def dc (e : Tm) : Tm := P.v "d" ◃ e ◃ P.v "v"
 
-/-- `λd. ⌜0⌝` -/
-private def diffK0 : Tm := P.lam "d" P.const0
+/-- `λd name. ⌜0⌝` -/
+private def diffK0 : Tm := P.lam "d" (P.lam "v" P.const0)
 
-private def diffConst : Tm := P.lam "d" P.const0
-private def diffVar : Tm := P.lam "d" P.const1
+private def diffConst : Tm := P.lam "d" (P.lam "v" P.const0)
+
+private def diffVar (payload : Tm) : Tm :=
+  P.lam "d" (P.lam "v"
+    (Tm.triage P.const0 (P.lam "_" P.const1) (P.lam "_" (P.lam "_" P.const0))
+      (P.q tequal ◃ payload ◃ P.v "v")))
 
 private def diffAdd (payload : Tm) : Tm :=
-  P.lam "d"
+  P.lam "d" (P.lam "v"
     (P.onPair payload P.const0 fun a b =>
-      P.mkAdd (dc a) (dc b))
+      P.mkAdd (dc a) (dc b)))
 
 private def diffMul (payload : Tm) : Tm :=
-  P.lam "d"
+  P.lam "d" (P.lam "v"
     (P.onPair payload P.const0 fun a b =>
-      P.mkAdd (P.mkMul (dc a) b) (P.mkMul a (dc b)))
+      P.mkAdd (P.mkMul (dc a) b) (P.mkMul a (dc b))))
 
 private def nm1Expr : Tm :=
   P.mk 0 (Tm.node ◃ Tm.node ◃ (P.q tbPred ◃ P.v "mag"))
 
 /-- `(u^n)' = n · u^(n-1) · u'` for a non-negative constant `n`. -/
 private def diffPow (payload : Tm) : Tm :=
-  P.lam "d"
+  P.lam "d" (P.lam "v"
     (P.onPair payload P.const0 fun u w =>
       Tm.triage
         P.const0
@@ -261,32 +295,32 @@ private def diffPow (payload : Tm) : Tm :=
                   (P.mkMul w (P.mkMul (dc u) (P.mkInv u))))))
             (P.lam "_" (P.lam "_" P.const0))
             (P.v "wTag"))))
-        w)
+        w))
 
 private def diffNeg (payload : Tm) : Tm :=
-  P.lam "d" (P.mkNeg (dc payload))
+  P.lam "d" (P.lam "v" (P.mkNeg (dc payload)))
 
 private def diffInv (payload : Tm) : Tm :=
-  P.lam "d"
+  P.lam "d" (P.lam "v"
     (P.mkNeg (P.mkMul (dc payload)
-      (P.mkInv (P.mkPow payload P.const2))))
+      (P.mkInv (P.mkPow payload P.const2)))))
 
 private def diffSin (payload : Tm) : Tm :=
-  P.lam "d" (P.mkMul (P.mkCos payload) (dc payload))
+  P.lam "d" (P.lam "v" (P.mkMul (P.mkCos payload) (dc payload)))
 
 private def diffCos (payload : Tm) : Tm :=
-  P.lam "d" (P.mkNeg (P.mkMul (P.mkSin payload) (dc payload)))
+  P.lam "d" (P.lam "v" (P.mkNeg (P.mkMul (P.mkSin payload) (dc payload))))
 
 private def diffExp (payload : Tm) : Tm :=
-  P.lam "d" (P.mkMul (P.mkExp payload) (dc payload))
+  P.lam "d" (P.lam "v" (P.mkMul (P.mkExp payload) (dc payload)))
 
 private def diffLn (payload : Tm) : Tm :=
-  P.lam "d" (P.mkMul (dc payload) (P.mkInv payload))
+  P.lam "d" (P.lam "v" (P.mkMul (dc payload) (P.mkInv payload)))
 
 /-- Peel stems of the tag, starting at ctor 1. -/
 private def diffFrom1 (rest payload : Tm) : Tm :=
   Tm.triage
-    diffVar
+    (diffVar payload)
     (P.lam "t"
       (Tm.triage
         (diffAdd payload)
