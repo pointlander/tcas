@@ -111,6 +111,11 @@ theorem toInt_ofInt (i : Int) : Value.toInt? (Value.ofInt i) = some i := by
       simp [Value.ofInt, Value.toInt?, Value.toBin_ofBin]
       cases n <;> rfl
 
+theorem ofInt_inj {i j : Int} (h : Value.ofInt i = Value.ofInt j) : i = j := by
+  have := congrArg Value.toInt? h
+  simp [toInt_ofInt] at this
+  exact this
+
 def negIntV (v : Value) : Value :=
   match v.toInt? with
   | some i => Value.ofInt (-i)

@@ -313,6 +313,187 @@ theorem powBinV_ofBin (b e : Nat) :
             _ = b ^ (2 * (e / 2) + 1) := by rw [← Nat.pow_succ]
             _ = b ^ e := by rw [← heq]
 
+/-- Any function with the bit-wise plus recurrences is addition on `ofBin`. -/
+theorem plus_bin_rec_unique (φ : Value → Value → Option Value)
+    (hleaf_l : ∀ n, φ .leaf (Value.ofBin n) = some (Value.ofBin n))
+    (hleaf_r : ∀ m, φ (Value.ofBin m) .leaf = some (Value.ofBin m))
+    (hee : ∀ m n, m ≠ 0 → n ≠ 0 → m % 2 = 0 → n % 2 = 0 →
+      φ (Value.ofBin m) (Value.ofBin n) =
+        (φ (Value.ofBin (m / 2)) (Value.ofBin (n / 2))).map cons0V)
+    (heo : ∀ m n, m ≠ 0 → m % 2 = 0 → n % 2 = 1 →
+      φ (Value.ofBin m) (Value.ofBin n) =
+        (φ (Value.ofBin (m / 2)) (Value.ofBin (n / 2))).map cons1V)
+    (hoe : ∀ m n, n ≠ 0 → m % 2 = 1 → n % 2 = 0 →
+      φ (Value.ofBin m) (Value.ofBin n) =
+        (φ (Value.ofBin (m / 2)) (Value.ofBin (n / 2))).map cons1V)
+    (hoo : ∀ m n, m % 2 = 1 → n % 2 = 1 →
+      φ (Value.ofBin m) (Value.ofBin n) =
+        (φ (Value.ofBin (m / 2)) (Value.ofBin (n / 2))).map
+          (fun s => cons0V (succBinV s))) :
+    ∀ m n, φ (Value.ofBin m) (Value.ofBin n) = some (Value.ofBin (m + n)) := by
+  intro m n
+  induction m using Nat.strongRecOn generalizing n with
+  | ind m ih =>
+      by_cases hm0 : m = 0
+      · subst hm0
+        simpa [ofBin_zero, Nat.zero_add] using hleaf_l n
+      · by_cases hn0 : n = 0
+        · subst hn0
+          simpa [ofBin_zero, Nat.add_zero] using hleaf_r m
+        · have hmlt : m / 2 < m :=
+            Nat.div_lt_self (Nat.pos_of_ne_zero hm0) (by decide)
+          have hnlt : n / 2 < n :=
+            Nat.div_lt_self (Nat.pos_of_ne_zero hn0) (by decide)
+          have ihm := ih (m / 2) hmlt (n / 2)
+          have hmd := Nat.div_add_mod m 2
+          have hnd := Nat.div_add_mod n 2
+          by_cases hmev : m % 2 = 0
+          · by_cases hnev : n % 2 = 0
+            · have hm : m = 2 * (m / 2) := by
+                simp [hmev] at hmd
+                simpa [Nat.mul_comm] using hmd.symm
+              have hn : n = 2 * (n / 2) := by
+                simp [hnev] at hnd
+                simpa [Nat.mul_comm] using hnd.symm
+              rw [hee m n hm0 hn0 hmev hnev, ihm, Option.map_some, cons0V_ofBin]
+              have : 2 * (m / 2 + n / 2) = m + n := by
+                rw [Nat.mul_add, ← hm, ← hn]
+              simp [this]
+            · have hnod : n % 2 = 1 := by
+                have : n % 2 < 2 := Nat.mod_lt n (by decide)
+                omega
+              have hm : m = 2 * (m / 2) := by
+                simp [hmev] at hmd
+                simpa [Nat.mul_comm] using hmd.symm
+              have hn : n = 2 * (n / 2) + 1 := by
+                simp [hnod] at hnd
+                simpa [Nat.mul_comm] using hnd.symm
+              rw [heo m n hm0 hmev hnod, ihm, Option.map_some, cons1V_ofBin]
+              have : 2 * (m / 2 + n / 2) + 1 = m + n := by
+                rw [Nat.mul_add, Nat.add_assoc, ← hn, ← hm]
+              simp [this]
+          · have hmod : m % 2 = 1 := by
+              have : m % 2 < 2 := Nat.mod_lt m (by decide)
+              omega
+            by_cases hnev : n % 2 = 0
+            · have hm : m = 2 * (m / 2) + 1 := by
+                simp [hmod] at hmd
+                simpa [Nat.mul_comm] using hmd.symm
+              have hn : n = 2 * (n / 2) := by
+                simp [hnev] at hnd
+                simpa [Nat.mul_comm] using hnd.symm
+              rw [hoe m n hn0 hmod hnev, ihm, Option.map_some, cons1V_ofBin]
+              have : 2 * (m / 2 + n / 2) + 1 = m + n := by
+                calc
+                  2 * (m / 2 + n / 2) + 1
+                      = 2 * (m / 2) + 2 * (n / 2) + 1 := by rw [Nat.mul_add]
+                  _ = (2 * (m / 2) + 1) + 2 * (n / 2) := by
+                        simp [Nat.add_assoc, Nat.add_comm]
+                  _ = m + n := by rw [← hm, ← hn]
+              simp [this]
+            · have hnod : n % 2 = 1 := by
+                have : n % 2 < 2 := Nat.mod_lt n (by decide)
+                omega
+              have hm : m = 2 * (m / 2) + 1 := by
+                simp [hmod] at hmd
+                simpa [Nat.mul_comm] using hmd.symm
+              have hn : n = 2 * (n / 2) + 1 := by
+                simp [hnod] at hnd
+                simpa [Nat.mul_comm] using hnd.symm
+              rw [hoo m n hmod hnod, ihm, Option.map_some, succBinV_ofBin, cons0V_ofBin]
+              have : 2 * (m / 2 + n / 2 + 1) = m + n := by
+                calc
+                  2 * (m / 2 + n / 2 + 1)
+                      = 2 * (m / 2) + 2 * (n / 2) + 2 := by
+                        rw [Nat.mul_add, Nat.mul_add, Nat.mul_one]
+                  _ = (2 * (m / 2) + 1) + (2 * (n / 2) + 1) := by
+                        omega
+                  _ = m + n := by rw [← hm, ← hn]
+              simp [this]
+
+theorem mul_bin_rec_unique (φ : Value → Value → Option Value)
+    (h0 : ∀ n, φ .leaf (Value.ofBin n) = some .leaf)
+    (hev : ∀ m n, m ≠ 0 → m % 2 = 0 →
+      φ (Value.ofBin m) (Value.ofBin n) =
+        (φ (Value.ofBin (m / 2)) (Value.ofBin n)).map cons0V)
+    (hod : ∀ m n, m % 2 = 1 →
+      φ (Value.ofBin m) (Value.ofBin n) =
+        (φ (Value.ofBin (m / 2)) (Value.ofBin n)).map
+          (fun k => plusBinV (Value.ofBin n) (cons0V k))) :
+    ∀ m n, φ (Value.ofBin m) (Value.ofBin n) = some (Value.ofBin (m * n)) := by
+  intro m n
+  induction m using Nat.strongRecOn with
+  | ind m ih =>
+      by_cases hm0 : m = 0
+      · subst hm0
+        simpa [ofBin_zero, Nat.zero_mul] using h0 n
+      · have hlt : m / 2 < m :=
+          Nat.div_lt_self (Nat.pos_of_ne_zero hm0) (by decide)
+        have ihm := ih (m / 2) hlt
+        by_cases hmev : m % 2 = 0
+        · rw [hev m n hm0 hmev, ihm, Option.map_some, cons0V_ofBin]
+          have hm : 2 * (m / 2) = m := by
+            have h := Nat.div_add_mod m 2
+            simp [hmev] at h
+            simpa [Nat.mul_comm] using h
+          have : 2 * (m / 2 * n) = m * n := by
+            rw [← Nat.mul_assoc, hm]
+          simp [this]
+        · have hmod : m % 2 = 1 := by
+            have : m % 2 < 2 := Nat.mod_lt m (by decide)
+            omega
+          rw [hod m n hmod, ihm, Option.map_some, cons0V_ofBin, plusBinV_ofBin]
+          have hm : 2 * (m / 2) + 1 = m := by
+            have h := Nat.div_add_mod m 2
+            simp [hmod] at h
+            simpa [Nat.mul_comm] using h
+          have : n + 2 * (m / 2 * n) = m * n := by
+            rw [Nat.add_comm, ← Nat.mul_assoc, ← Nat.succ_mul, Nat.succ_eq_add_one, hm]
+          simp [this]
+
+theorem pow_bin_rec_unique (φ : Value → Value → Option Value)
+    (h0 : ∀ b, φ (Value.ofBin b) .leaf = some (Value.ofBin 1))
+    (hev : ∀ b e, e ≠ 0 → e % 2 = 0 →
+      φ (Value.ofBin b) (Value.ofBin e) =
+        φ (Value.ofBin (b * b)) (Value.ofBin (e / 2)))
+    (hod : ∀ b e, e % 2 = 1 →
+      φ (Value.ofBin b) (Value.ofBin e) =
+        (φ (Value.ofBin (b * b)) (Value.ofBin (e / 2))).map
+          (fun k => mulBinV (Value.ofBin b) k)) :
+    ∀ b e, φ (Value.ofBin b) (Value.ofBin e) = some (Value.ofBin (b ^ e)) := by
+  intro b e
+  induction e using Nat.strongRecOn generalizing b with
+  | ind e ih =>
+      by_cases he0 : e = 0
+      · subst he0
+        simpa [ofBin_zero, Nat.pow_zero] using h0 b
+      · have hlt : e / 2 < e :=
+          Nat.div_lt_self (Nat.pos_of_ne_zero he0) (by decide)
+        by_cases hev' : e % 2 = 0
+        · rw [hev b e he0 hev', ih (e / 2) hlt]
+          apply congrArg (fun n => some (Value.ofBin n))
+          have heq : e = 2 * (e / 2) := by
+            have := Nat.div_add_mod e 2
+            omega
+          calc
+            (b * b) ^ (e / 2) = (b ^ 2) ^ (e / 2) := by rw [Nat.pow_two]
+            _ = b ^ (2 * (e / 2)) := by rw [← Nat.pow_mul]
+            _ = b ^ e := by rw [← heq]
+        · have hod' : e % 2 = 1 := by
+            have : e % 2 < 2 := Nat.mod_lt e (by decide)
+            omega
+          rw [hod b e hod', ih (e / 2) hlt, Option.map_some, mulBinV_ofBin]
+          apply congrArg (fun n => some (Value.ofBin n))
+          have heq : e = 2 * (e / 2) + 1 := by
+            have := Nat.div_add_mod e 2
+            omega
+          calc
+            b * (b * b) ^ (e / 2) = b * (b ^ 2) ^ (e / 2) := by rw [Nat.pow_two]
+            _ = b * b ^ (2 * (e / 2)) := by rw [← Nat.pow_mul]
+            _ = b ^ (2 * (e / 2)) * b := Nat.mul_comm _ _
+            _ = b ^ (2 * (e / 2) + 1) := by rw [← Nat.pow_succ]
+            _ = b ^ e := by rw [← heq]
+
 /-! ### Tree programs -/
 
 /-- `cons0 t` is `0 :: t`, or `0` if `t` is `0`. -/

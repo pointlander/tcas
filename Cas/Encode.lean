@@ -288,6 +288,25 @@ theorem toBin_ofBin (n : Nat) : toBin? (ofBin n) = some n := by
               simp [hmod] at this
               omega
 
+theorem ofBin_inj {m n : Nat} (h : ofBin m = ofBin n) : m = n := by
+  have := congrArg toBin? h
+  simp [toBin_ofBin] at this
+  exact this
+
+theorem ofList_inj {xs ys : List Value} (h : ofList xs = ofList ys) : xs = ys := by
+  induction xs generalizing ys with
+  | nil =>
+      cases ys with
+      | nil => rfl
+      | cons _ _ => simp [ofList] at h
+  | cons x xs ih =>
+      cases ys with
+      | nil => simp [ofList] at h
+      | cons y ys =>
+          simp [ofList] at h
+          obtain ⟨hx, ht⟩ := h
+          rw [hx, ih ht]
+
 /-- Sign-magnitude integer. Magnitude is a binary nat (`ofBin`).
     Non-negative: `△ △ n`. Negative: `△ (△ △) n`. -/
 def ofInt : Int → Value

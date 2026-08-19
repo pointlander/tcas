@@ -172,6 +172,14 @@ def mulRatV (a b : Value) : Value :=
 def divRatV (a b : Value) : Value :=
   mulRatV a (invRatV b)
 
+theorem plusRatV_ofRat_one (a b : Int) :
+    plusRatV (Value.ofRat a 1) (Value.ofRat b 1) = Value.ofRat (a + b) 1 := by
+  simp [plusRatV, toRat_ofRat_one]
+
+theorem mulRatV_ofRat_one (a b : Int) :
+    mulRatV (Value.ofRat a 1) (Value.ofRat b 1) = Value.ofRat (a * b) 1 := by
+  simp [mulRatV, toRat_ofRat_one]
+
 theorem plusRatV_ofRat (a c : Int) (b d : Nat)
     (hb : b ≠ 0) (hd : d ≠ 0)
     (ha : Nat.gcd a.natAbs b = 1) (hc : Nat.gcd c.natAbs d = 1) :
@@ -190,5 +198,9 @@ theorem negRatV_ofRat (a : Int) (b : Nat) (hb : b ≠ 0)
     (ha : Nat.gcd a.natAbs b = 1) :
     negRatV (Value.ofRat a b) = Value.ofRat (-a) b := by
   simp [negRatV, toRat_ofRat a b hb ha]
+
+theorem negRatV_ofRat_one (a : Int) :
+    negRatV (Value.ofRat a 1) = Value.ofRat (-a) 1 :=
+  negRatV_ofRat a 1 (by decide) (Nat.gcd_one_right _)
 
 end Cas

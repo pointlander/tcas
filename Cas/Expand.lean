@@ -187,4 +187,37 @@ def expandV (e : Value) : Value :=
   | some expr => Expr.encode (expandOnce expr)
   | none => e
 
+theorem expandOnce_add (a b : Expr) :
+    expandOnce (.add a b) = .add (expandOnce a) (expandOnce b) := rfl
+
+theorem expandOnce_mul_add_left (a b c : Expr) :
+    expandOnce (.mul (.add a b) c) =
+      .add (.mul (expandOnce a) (expandOnce c))
+        (.mul (expandOnce b) (expandOnce c)) := by
+  simp [expandOnce]
+
+/-- Right-distrib only fires when the expanded left factor is not itself a sum. -/
+theorem expandOnce_mul_add_right (a b c : Expr)
+    (h : ∀ x y, expandOnce a ≠ .add x y) :
+    expandOnce (.mul a (.add b c)) =
+      .add (.mul (expandOnce a) (expandOnce b))
+        (.mul (expandOnce a) (expandOnce c)) := by
+  cases hA : expandOnce a with
+  | add x y => exact (h x y hA).elim
+  | const n => simp [expandOnce, hA]
+  | var v => simp [expandOnce, hA]
+  | mul x y => simp [expandOnce, hA]
+  | pow x y => simp [expandOnce, hA]
+  | neg x => simp [expandOnce, hA]
+  | inv x => simp [expandOnce, hA]
+  | sin x => simp [expandOnce, hA]
+  | cos x => simp [expandOnce, hA]
+  | exp x => simp [expandOnce, hA]
+  | ln x => simp [expandOnce, hA]
+
+theorem expandOnce_neg_add (a b : Expr) :
+    expandOnce (.neg (.add a b)) =
+      .add (.neg (expandOnce a)) (.neg (expandOnce b)) := by
+  simp [expandOnce]
+
 end Cas

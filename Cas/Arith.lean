@@ -4,9 +4,13 @@
   `plusV` / `mulV` / `powV` are the denotation of the unary-nat programs
   `tplus` / `ttimes` / `tpow`. Any 2-argument function that satisfies the
   same recurrences computes `Nat` addition, multiplication and
-  exponentiation. Predecessor and zero-test are proved by unfolding the
-  small `triage` programs. `evalPoly` is the denotation of kernel
-  evaluation on encoded nat-polynomials, now using binary magnitudes.
+  exponentiation. Binary nats have the same uniqueness theorems on
+  `ofBin` (`plus_bin_rec_unique` and friends in `Cas.Bin`). Predecessor
+  and zero-test are proved by unfolding the small `triage` programs.
+  `evalPoly` is the denotation of kernel evaluation on encoded
+  nat-polynomials, using binary magnitudes. `walkEval` is the denotation
+  of `teval` against a named environment; `walkDiff` is the denotation
+  of `tdiff`.
 -/
 
 import Cas.Semantics
@@ -347,5 +351,172 @@ theorem evalPoly_natPoly (e : Expr) (n : Nat) (h : NatPoly e) :
       refine ⟨ka ^ kb, ?_, ?_⟩
       · simp [evalNatAt, ha1, hb1]
       · simpa [powBinV_ofBin] using evalPoly_pow (Value.ofBin n) a b ha2 hb2
+
+/-! ### `walkEval` agrees with `evalInt` on integer combinations -/
+
+theorem liftInt_ofInt (i : Int) :
+    liftInt (Value.ofInt i) = Value.ofRat i 1 := by
+  simp [liftInt, toInt_ofInt]
+
+private theorem beq_false_of_ne {x y : String} (h : x ≠ y) : (x == y) = false := by
+  simpa [beq_iff_eq] using h
+
+theorem lookupEnv_encodeEnv (env : Expr.Env) (x : String) :
+    lookupEnv (Expr.encodeString x) (Expr.encodeEnv env) =
+      (Expr.lookup x env).map (fun n => Value.ofRat n 1) := by
+  induction env with
+  | nil =>
+      simp [lookupEnv, Expr.encodeEnv, Expr.lookup]
+  | cons kv rest ih =>
+      obtain ⟨k, n⟩ := kv
+      unfold Expr.encodeEnv lookupEnv
+      by_cases h : x = k
+      · subst h
+        simp [Value.equalV_rfl, Expr.lookup]
+      · have hne : Value.equalV (Expr.encodeString k) (Expr.encodeString x) = false := by
+          rw [Bool.eq_false_iff, ne_eq, Value.equalV_eq]
+          intro heq
+          exact h (encodeString_inj heq).symm
+        simp [hne, beq_false_of_ne h, Expr.lookup, ih]
+
+theorem walkEval_const (env : Value) (n : Int) :
+    walkEval env (Expr.encode (.const n)) = some (Value.ofRat n 1) := by
+  simp [encode_const, Expr.tag, walkEval, liftInt_ofInt]
+
+theorem walkEval_var (env : Expr.Env) (x : String) :
+    walkEval (Expr.encodeEnv env) (Expr.encode (.var x)) =
+      (Expr.lookup x env).map (fun n => Value.ofRat n 1) := by
+  simp [encode_var, Expr.tag, walkEval, lookupEnv_encodeEnv]
+
+theorem walkEval_add (env : Value) (a b : Expr) {va vb : Value}
+    (ha : walkEval env (Expr.encode a) = some va)
+    (hb : walkEval env (Expr.encode b) = some vb) :
+    walkEval env (Expr.encode (.add a b)) = some (plusRatV va vb) := by
+  simp [encode_add, Expr.tag, walkEval, ha, hb]
+
+theorem walkEval_mul (env : Value) (a b : Expr) {va vb : Value}
+    (ha : walkEval env (Expr.encode a) = some va)
+    (hb : walkEval env (Expr.encode b) = some vb) :
+    walkEval env (Expr.encode (.mul a b)) = some (mulRatV va vb) := by
+  simp [encode_mul, Expr.tag, walkEval, ha, hb]
+
+theorem walkEval_neg (env : Value) (a : Expr) {va : Value}
+    (ha : walkEval env (Expr.encode a) = some va) :
+    walkEval env (Expr.encode (.neg a)) = some (negRatV va) := by
+  simp [encode_neg, Expr.tag, walkEval, ha]
+
+/-- Integer polynomials: constants, variables, `+`, `*`, `-`. -/
+inductive ZPoly : Expr → Prop where
+  | const (n : Int) : ZPoly (.const n)
+  | var (x : String) : ZPoly (.var x)
+  | add {a b} : ZPoly a → ZPoly b → ZPoly (.add a b)
+  | mul {a b} : ZPoly a → ZPoly b → ZPoly (.mul a b)
+  | neg {a} : ZPoly a → ZPoly (.neg a)
+
+theorem walkEval_zpoly (e : Expr) (env : Expr.Env) (h : ZPoly e) :
+    walkEval (Expr.encodeEnv env) (Expr.encode e) =
+      (Expr.evalInt env e).map (fun n => Value.ofRat n 1) := by
+  induction h with
+  | const n =>
+      simp [walkEval_const, Expr.evalInt]
+  | var x =>
+      simpa [Expr.evalInt] using walkEval_var env x
+  | @add a b _ _ iha ihb =>
+      simp [encode_add, Expr.tag, walkEval, Expr.evalInt, iha, ihb]
+      cases Expr.evalInt env a <;> cases Expr.evalInt env b
+        <;> simp [plusRatV_ofRat_one]
+  | @mul a b _ _ iha ihb =>
+      simp [encode_mul, Expr.tag, walkEval, Expr.evalInt, iha, ihb]
+      cases Expr.evalInt env a <;> cases Expr.evalInt env b
+        <;> simp [mulRatV_ofRat_one]
+  | @neg a _ ih =>
+      simp [encode_neg, Expr.tag, walkEval, Expr.evalInt, ih]
+      cases Expr.evalInt env a <;> simp [negRatV_ofRat_one]
+
+/-! ### `walkDiff` agrees with `Expr.diff` -/
+
+theorem walkDiff_const (var : Value) (n : Int) :
+    walkDiff var (Expr.encode (.const n)) = some (Expr.encode (.const 0)) := by
+  simp [encode_const, Expr.tag, walkDiff]
+
+theorem walkDiff_var (x y : String) :
+    walkDiff (Expr.encodeString x) (Expr.encode (.var y)) =
+      some (Expr.encode (Expr.diff x (.var y))) := by
+  simp [encode_var, Expr.tag, walkDiff]
+  by_cases h : x = y
+  · subst h
+    simp [Value.equalV_rfl, Expr.diff]
+  · have hne : Value.equalV (Expr.encodeString y) (Expr.encodeString x) = false := by
+      rw [Bool.eq_false_iff, ne_eq, Value.equalV_eq]
+      intro heq
+      exact h (encodeString_inj heq).symm
+    simp [hne, beq_false_of_ne h, Expr.diff]
+
+theorem walkDiff_add (var : Value) (a b : Expr) {da db : Value}
+    (ha : walkDiff var (Expr.encode a) = some da)
+    (hb : walkDiff var (Expr.encode b) = some db) :
+    walkDiff var (Expr.encode (.add a b)) =
+      some (Expr.tagged 2 (.fork da db)) := by
+  simp [encode_add, Expr.tag, walkDiff, ha, hb]
+
+theorem walkDiff_mul (var : Value) (a b : Expr) {da db : Value}
+    (ha : walkDiff var (Expr.encode a) = some da)
+    (hb : walkDiff var (Expr.encode b) = some db) :
+    walkDiff var (Expr.encode (.mul a b)) =
+      some (Expr.tagged 2
+        (.fork (Expr.tagged 3 (.fork da (Expr.encode b)))
+               (Expr.tagged 3 (.fork (Expr.encode a) db)))) := by
+  simp [encode_mul, Expr.tag, walkDiff, ha, hb]
+
+theorem walkDiff_neg (var : Value) (a : Expr) {da : Value}
+    (ha : walkDiff var (Expr.encode a) = some da) :
+    walkDiff var (Expr.encode (.neg a)) = some (Expr.tagged 5 da) := by
+  simp [encode_neg, Expr.tag, walkDiff, ha]
+
+/-- Constructors on which `walkDiff` matches `Expr.diff` (no general power). -/
+inductive DiffShape : Expr → Prop where
+  | const (n : Int) : DiffShape (.const n)
+  | var (x : String) : DiffShape (.var x)
+  | add {a b} : DiffShape a → DiffShape b → DiffShape (.add a b)
+  | mul {a b} : DiffShape a → DiffShape b → DiffShape (.mul a b)
+  | neg {a} : DiffShape a → DiffShape (.neg a)
+  | inv {a} : DiffShape a → DiffShape (.inv a)
+  | sin {a} : DiffShape a → DiffShape (.sin a)
+  | cos {a} : DiffShape a → DiffShape (.cos a)
+  | exp {a} : DiffShape a → DiffShape (.exp a)
+  | ln {a} : DiffShape a → DiffShape (.ln a)
+
+theorem walkDiff_diff (e : Expr) (x : String) (h : DiffShape e) :
+    walkDiff (Expr.encodeString x) (Expr.encode e) =
+      some (Expr.encode (Expr.diff x e)) := by
+  induction h with
+  | const n =>
+      simpa [Expr.diff] using walkDiff_const (Expr.encodeString x) n
+  | var y =>
+      exact walkDiff_var x y
+  | @add a b _ _ iha ihb =>
+      have h := walkDiff_add (Expr.encodeString x) a b iha ihb
+      simpa [Expr.diff, Expr.encode, Expr.tagged] using h
+  | @mul a b _ _ iha ihb =>
+      have h := walkDiff_mul (Expr.encodeString x) a b iha ihb
+      simpa [Expr.diff, Expr.encode, Expr.tagged] using h
+  | @neg a _ ih =>
+      have h := walkDiff_neg (Expr.encodeString x) a ih
+      simpa [Expr.diff, Expr.encode, Expr.tagged] using h
+  | @inv a _ ih =>
+      simp [encode_inv, Expr.tag, Expr.tagged, Expr.diff, walkDiff, ih,
+        encode_neg, encode_mul, encode_inv, encode_pow, encode_const]
+  | @sin a _ ih =>
+      simp [encode_sin, Expr.tag, Expr.tagged, Expr.diff, walkDiff, ih,
+        encode_mul, encode_cos]
+  | @cos a _ ih =>
+      simp [encode_cos, Expr.tag, Expr.tagged, Expr.diff, walkDiff, ih,
+        encode_neg, encode_mul, encode_sin]
+  | @exp a _ ih =>
+      simp [encode_exp, Expr.tag, Expr.tagged, Expr.diff, walkDiff, ih,
+        encode_mul, encode_exp]
+  | @ln a _ ih =>
+      simp [encode_ln, Expr.tag, Expr.tagged, Expr.diff, walkDiff, ih,
+        encode_mul, encode_inv]
 
 end Cas

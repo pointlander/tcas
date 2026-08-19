@@ -160,11 +160,20 @@ lake exe cas test
 `Cas/Arith.lean` records the denotation of unary-nat arithmetic
 (`plusV`, `mulV`, `powV`) and proves it matches `Nat` `+` / `*` / `^`.
 Any 2-argument function with the same recurrences is unique on encoded
-nats (`plus_rec_unique`, and the same for times and pow). Predecessor
-and zero-test reduce by unfolding the small `triage` programs.
+nats (`plus_rec_unique`, and the same for times and pow). Binary nats
+have the matching uniqueness theorems `plus_bin_rec_unique` /
+`mul_bin_rec_unique` / `pow_bin_rec_unique`. Predecessor and zero-test
+reduce by unfolding the small `triage` programs.
 `evalPoly` is the denotation of kernel evaluation on nat-polynomials
 and agrees with ordinary `Nat` evaluation (`evalPoly_natPoly`).
+`walkEval` is the denotation of `teval` against a named environment; it
+agrees with `evalInt` on integer polynomials (`walkEval_zpoly`).
+`walkDiff` agrees with `Expr.diff` on the constructors that do not need
+the general power rule (`walkDiff_diff`).
 `toRat_ofRat` says a coprime `p/q` decodes as itself.
+`ofBin_inj` / `encodeString_inj` say the encodings of binary nats and
+variable names are injective. `expandOnce` is the denotation of one
+`texpand` distribute pass.
 
 ## Layout
 
@@ -185,7 +194,7 @@ Cas/Simp.lean       tsimp, one bottom-up rewrite pass
 Cas/Expand.lean     texpand, distribute * over +
 Cas/Kernel.lean     run those programs; Lean walkers as spec
 Cas/Semantics.lean  fuelled evaluator lemmas (K, I, wait, values)
-Cas/Arith.lean      plus/times/pow denotation, uniqueness, pred/isZero
+Cas/Arith.lean      plus/times/pow denotation, uniqueness, walkEval/walkDiff
 Cas/StarBeta.lean   operational star-β
 Cas/Fixpoint.lean   Y2 / Z / swap unfolding
 Cas/Trace.lean      CBV tracer for the five rules

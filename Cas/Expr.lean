@@ -234,4 +234,70 @@ theorem tag_toNat (n : Nat) : (Expr.tag n).toNat? = some n := by
   | succ n ih =>
       simp [Expr.tag, Value.toNat?, ih]
 
+theorem encode_const (n : Int) :
+    Expr.encode (.const n) = .fork (Expr.tag 0) (Value.ofInt n) := rfl
+
+theorem encode_var (x : String) :
+    Expr.encode (.var x) = .fork (Expr.tag 1) (Expr.encodeString x) := rfl
+
+theorem encode_add (a b : Expr) :
+    Expr.encode (.add a b) =
+      .fork (Expr.tag 2) (.fork (Expr.encode a) (Expr.encode b)) := rfl
+
+theorem encode_mul (a b : Expr) :
+    Expr.encode (.mul a b) =
+      .fork (Expr.tag 3) (.fork (Expr.encode a) (Expr.encode b)) := rfl
+
+theorem encode_pow (a b : Expr) :
+    Expr.encode (.pow a b) =
+      .fork (Expr.tag 4) (.fork (Expr.encode a) (Expr.encode b)) := rfl
+
+theorem encode_neg (a : Expr) :
+    Expr.encode (.neg a) = .fork (Expr.tag 5) (Expr.encode a) := rfl
+
+theorem encode_inv (a : Expr) :
+    Expr.encode (.inv a) = .fork (Expr.tag 6) (Expr.encode a) := rfl
+
+theorem encode_sin (a : Expr) :
+    Expr.encode (.sin a) = .fork (Expr.tag 7) (Expr.encode a) := rfl
+
+theorem encode_cos (a : Expr) :
+    Expr.encode (.cos a) = .fork (Expr.tag 8) (Expr.encode a) := rfl
+
+theorem encode_exp (a : Expr) :
+    Expr.encode (.exp a) = .fork (Expr.tag 9) (Expr.encode a) := rfl
+
+theorem encode_ln (a : Expr) :
+    Expr.encode (.ln a) = .fork (Expr.tag 10) (Expr.encode a) := rfl
+
+private theorem map_ofBin_char_inj {cs ds : List Char}
+    (h : cs.map (fun c => Value.ofBin c.toNat) =
+      ds.map (fun c => Value.ofBin c.toNat)) : cs = ds := by
+  induction cs generalizing ds with
+  | nil =>
+      cases ds with
+      | nil => rfl
+      | cons _ _ => simp at h
+  | cons c cs ih =>
+      cases ds with
+      | nil => simp at h
+      | cons d ds =>
+          simp at h
+          obtain ⟨hcd, hrest⟩ := h
+          have hnat : c.toNat = d.toNat := Value.ofBin_inj hcd
+          have : c = d := by
+            cases c; cases d
+            apply Char.ext
+            simp [Char.toNat] at hnat
+            exact UInt32.toNat_inj.mp hnat
+          subst this
+          rw [ih hrest]
+
+theorem encodeString_inj {s t : String} (h : Expr.encodeString s = Expr.encodeString t) :
+    s = t := by
+  simp [Expr.encodeString] at h
+  have := Value.ofList_inj h
+  have := map_ofBin_char_inj this
+  exact String.ext this
+
 end Cas

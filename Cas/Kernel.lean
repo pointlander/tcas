@@ -148,59 +148,44 @@ def liftInt (v : Value) : Value :=
       | none => Value.ofRat 0 1
 
 /-- First matching `△ ⟨name, val⟩` in an association list. -/
-partial def lookupEnv (name env : Value) : Option Value :=
-  match env with
-  | .fork (.fork n r) rest =>
-      if Value.equalV n name then some r else lookupEnv name rest
+def lookupEnv (name : Value) : Value → Option Value
+  | .fork head rest =>
+      match head with
+      | .fork n r =>
+          if Value.equalV n name then some r else lookupEnv name rest
+      | _ => none
   | _ => none
 
 /-- Lean-side intensional walker; the specification of `teval`.
-    Results are reduced rationals (`Value.ofRat`). -/
-partial def walkEval (env : Value) (e : Value) : Option Value :=
-  match e with
-  | .fork tag payload =>
-      match tag.toNat? with
-      | some 0 =>
-          -- const: payload is an `ofInt`; lift to `p/1`
-          some (liftInt payload)
-      | some 1 =>
-          lookupEnv payload env
-      | some 2 =>
-          match payload with
-          | .fork a b =>
-              match walkEval env a, walkEval env b with
-              | some va, some vb => some (plusRatV va vb)
-              | _, _ => none
-          | _ => none
-      | some 3 =>
-          match payload with
-          | .fork a b =>
-              match walkEval env a, walkEval env b with
-              | some va, some vb => some (mulRatV va vb)
-              | _, _ => none
-          | _ => none
-      | some 4 =>
-          match payload with
-          | .fork a b =>
-              match walkEval env a, walkEval env b with
-              | some va, some vb =>
-                  match va.toRat?, vb.toRat? with
-                  | some (p, q), some (e, 1) =>
-                      let n := e.natAbs
-                      let r := Value.ofRat (p ^ n) (q ^ n)
-                      if e < 0 then some (invRatV r) else some r
-                  | _, _ => none
-              | _, _ => none
-          | _ => none
-      | some 5 =>
-          match walkEval env payload with
-          | some v => some (negRatV v)
-          | none => none
-      | some 6 =>
-          match walkEval env payload with
-          | some v => some (invRatV v)
-          | none => none
-      | _ => none
+    Results are reduced rationals (`Value.ofRat`). Patterns are the
+    constructor tags (`Expr.tag n` is `n` nested stems). -/
+def walkEval (env : Value) : Value → Option Value
+  | .fork .leaf payload =>
+      some (liftInt payload)
+  | .fork (.stem .leaf) payload =>
+      lookupEnv payload env
+  | .fork (.stem (.stem .leaf)) (.fork a b) =>
+      match walkEval env a, walkEval env b with
+      | some va, some vb => some (plusRatV va vb)
+      | _, _ => none
+  | .fork (.stem (.stem (.stem .leaf))) (.fork a b) =>
+      match walkEval env a, walkEval env b with
+      | some va, some vb => some (mulRatV va vb)
+      | _, _ => none
+  | .fork (.stem (.stem (.stem (.stem .leaf)))) (.fork a b) =>
+      match walkEval env a, walkEval env b with
+      | some va, some vb =>
+          match va.toRat?, vb.toRat? with
+          | some (p, q), some (e, 1) =>
+              let n := e.natAbs
+              let r := Value.ofRat (p ^ n) (q ^ n)
+              if e < 0 then some (invRatV r) else some r
+          | _, _ => none
+      | _, _ => none
+  | .fork (.stem (.stem (.stem (.stem (.stem .leaf))))) payload =>
+      (walkEval env payload).map negRatV
+  | .fork (.stem (.stem (.stem (.stem (.stem (.stem .leaf)))))) payload =>
+      (walkEval env payload).map invRatV
   | _ => none
 
 /-- Cancel an `ofRat` pair. Uses the Lean `ofRat` reducer; `tmkRat` is the
@@ -280,104 +265,72 @@ def kernelRInv (a : Value) : Option Value :=
   | none => none
 
 /-- Lean-side intensional walker; the specification of `tdiff`. -/
-partial def walkDiff (var : Value) : Value → Option Value
-  | .fork tag payload =>
-      match tag.toNat? with
-      | some 0 =>
-          some (Expr.encode (.const 0))
-      | some 1 =>
-          if Value.equalV payload var then
-            some (Expr.encode (.const 1))
-          else
-            some (Expr.encode (.const 0))
-      | some 2 =>
-          match payload with
-          | .fork a b =>
-              match walkDiff var a, walkDiff var b with
-              | some da, some db =>
-                  some (Expr.tagged 2 (.fork da db))
-              | _, _ => none
-          | _ => none
-      | some 3 =>
-          match payload with
-          | .fork a b =>
-              match walkDiff var a, walkDiff var b with
-              | some da, some db =>
-                  let left  := Expr.tagged 3 (.fork da b)
-                  let right := Expr.tagged 3 (.fork a db)
-                  some (Expr.tagged 2 (.fork left right))
-              | _, _ => none
-          | _ => none
-      | some 4 =>
-          match payload with
-          | .fork a b =>
-              match b with
-              | .fork bt bp =>
-                  match bt.toNat? with
-                  | some 0 =>
-                      match bp with
-                      | .fork .leaf mag =>
-                          match mag.toBin?, walkDiff var a with
-                          | some n, some da =>
-                              let nE   := Expr.encode (.const (Int.ofNat n))
-                              let nm1  := Expr.encode (.const (Int.ofNat (n - 1)))
-                              let pow' := Expr.tagged 4 (.fork a nm1)
-                              let mid  := Expr.tagged 3 (.fork nE pow')
-                              some (Expr.tagged 3 (.fork mid da))
-                          | _, _ => none
-                      | _ => none
-                  | _ =>
-                      match walkDiff var a, walkDiff var b with
-                      | some da, some db =>
-                          let lnA  := Expr.tagged 10 a
-                          let invA := Expr.tagged 6 a
-                          let left := Expr.tagged 3 (.fork db lnA)
-                          let mid  := Expr.tagged 3 (.fork da invA)
-                          let right := Expr.tagged 3 (.fork b mid)
-                          let sum  := Expr.tagged 2 (.fork left right)
-                          let pow  := Expr.tagged 4 (.fork a b)
-                          some (Expr.tagged 3 (.fork pow sum))
-                      | _, _ => none
-              | _ => none
-          | _ => none
-      | some 5 =>
-          match walkDiff var payload with
-          | some da => some (Expr.tagged 5 da)
-          | none    => none
-      | some 6 =>
-          match walkDiff var payload with
-          | some da =>
-              let u2   := Expr.tagged 4 (.fork payload (Expr.encode (.const 2)))
-              let inv  := Expr.tagged 6 u2
-              let prod := Expr.tagged 3 (.fork da inv)
-              some (Expr.tagged 5 prod)
-          | none => none
-      | some 7 =>
-          match walkDiff var payload with
-          | some da =>
-              let c := Expr.tagged 8 payload
-              some (Expr.tagged 3 (.fork c da))
-          | none => none
-      | some 8 =>
-          match walkDiff var payload with
-          | some da =>
-              let s := Expr.tagged 7 payload
-              let p := Expr.tagged 3 (.fork s da)
-              some (Expr.tagged 5 p)
-          | none => none
-      | some 9 =>
-          match walkDiff var payload with
-          | some da =>
-              let e := Expr.tagged 9 payload
-              some (Expr.tagged 3 (.fork e da))
-          | none => none
-      | some 10 =>
-          match walkDiff var payload with
-          | some da =>
-              let inv := Expr.tagged 6 payload
-              some (Expr.tagged 3 (.fork da inv))
-          | none => none
-      | _ => none
+def walkDiff (var : Value) : Value → Option Value
+  | .fork .leaf _ =>
+      some (Expr.encode (.const 0))
+  | .fork (.stem .leaf) payload =>
+      if Value.equalV payload var then
+        some (Expr.encode (.const 1))
+      else
+        some (Expr.encode (.const 0))
+  | .fork (.stem (.stem .leaf)) (.fork a b) =>
+      match walkDiff var a, walkDiff var b with
+      | some da, some db =>
+          some (Expr.tagged 2 (.fork da db))
+      | _, _ => none
+  | .fork (.stem (.stem (.stem .leaf))) (.fork a b) =>
+      match walkDiff var a, walkDiff var b with
+      | some da, some db =>
+          let left  := Expr.tagged 3 (.fork da b)
+          let right := Expr.tagged 3 (.fork a db)
+          some (Expr.tagged 2 (.fork left right))
+      | _, _ => none
+  | .fork (.stem (.stem (.stem (.stem .leaf)))) (.fork a b) =>
+      match walkDiff var a, walkDiff var b with
+      | some da, some db =>
+          match b with
+          | .fork .leaf (.fork .leaf mag) =>
+              match mag.toBin? with
+              | some n =>
+                  let nE   := Expr.encode (.const (Int.ofNat n))
+                  let nm1  := Expr.encode (.const (Int.ofNat (n - 1)))
+                  let pow' := Expr.tagged 4 (.fork a nm1)
+                  let mid  := Expr.tagged 3 (.fork nE pow')
+                  some (Expr.tagged 3 (.fork mid da))
+              | none => none
+          | .fork .leaf _ => none
+          | _ =>
+              let lnA  := Expr.tagged 10 a
+              let invA := Expr.tagged 6 a
+              let left := Expr.tagged 3 (.fork db lnA)
+              let mid  := Expr.tagged 3 (.fork da invA)
+              let right := Expr.tagged 3 (.fork b mid)
+              let sum  := Expr.tagged 2 (.fork left right)
+              let pow  := Expr.tagged 4 (.fork a b)
+              some (Expr.tagged 3 (.fork pow sum))
+      | _, _ => none
+  | .fork (.stem (.stem (.stem (.stem (.stem .leaf))))) payload =>
+      (walkDiff var payload).map (fun da => Expr.tagged 5 da)
+  | .fork (.stem (.stem (.stem (.stem (.stem (.stem .leaf)))))) payload =>
+      match walkDiff var payload with
+      | some da =>
+          let u2   := Expr.tagged 4 (.fork payload (Expr.encode (.const 2)))
+          let inv  := Expr.tagged 6 u2
+          let prod := Expr.tagged 3 (.fork da inv)
+          some (Expr.tagged 5 prod)
+      | none => none
+  | .fork (.stem (.stem (.stem (.stem (.stem (.stem (.stem .leaf))))))) payload =>
+      (walkDiff var payload).map (fun da =>
+        Expr.tagged 3 (.fork (Expr.tagged 8 payload) da))
+  | .fork (.stem (.stem (.stem (.stem (.stem (.stem (.stem (.stem .leaf)))))))) payload =>
+      (walkDiff var payload).map (fun da =>
+        Expr.tagged 5 (Expr.tagged 3 (.fork (Expr.tagged 7 payload) da)))
+  | .fork (.stem (.stem (.stem (.stem (.stem (.stem (.stem (.stem (.stem .leaf))))))))) payload =>
+      (walkDiff var payload).map (fun da =>
+        Expr.tagged 3 (.fork (Expr.tagged 9 payload) da))
+  | .fork (.stem (.stem (.stem (.stem (.stem (.stem (.stem (.stem (.stem (.stem .leaf)))))))))) payload =>
+      (walkDiff var payload).map (fun da =>
+        Expr.tagged 3 (.fork da (Expr.tagged 6 payload)))
   | _ => none
 
 /-- Reduce `tdiff ⬝ e ⬝ ⌜name⌝`. -/
