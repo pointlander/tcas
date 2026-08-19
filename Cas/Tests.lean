@@ -223,6 +223,10 @@ private def traceDone (t v : Tree) : Bool :=
 #guard tlookup.isProgram && tlookup.isClosed
 #guard (tsimp ()).isProgram && (tsimp ()).isClosed
 #guard (texpand ()).isProgram && (texpand ()).isClosed
+#guard collectOnce (.add (.var "x") (.var "x")) == .mul (.const 2) (.var "x")
+#guard collectOnce (.add (.var "x") (.neg (.var "x"))) == .const 0
+#guard collectOnce (.add (.mul (.const 2) (.var "x")) (.mul (.const 3) (.var "x")))
+        == .mul (.const 5) (.var "x")
 
 /-- Runtime checks for `teval` / `tdiff`. Returns `none` on success. -/
 def programSelfTest (_ : Unit := ()) : Option String :=

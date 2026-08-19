@@ -3,8 +3,8 @@
 
   `texpand` is a `Y2` of a constructor dispatch, same shape as `tsimp`.
   Children are expanded first; then a `mul` whose side is an `add`
-  becomes a sum of products, and `neg` of an `add` splits. Iterate
-  then `tsimp` so `(x+1)*(x-1)` reduces to `x * x - 1`.
+  becomes a sum of products, and `neg` of an `add` splits. Iterate,
+  then `tsimp` and `tcollect`, so `(x+1)*(x-1)` reduces to `x * x - 1`.
 -/
 
 import Cas.Program

@@ -18,6 +18,7 @@ import Cas.Bracket
 import Cas.Program
 import Cas.Simp
 import Cas.Expand
+import Cas.Collect
 
 namespace Cas
 
@@ -371,6 +372,27 @@ def kernelExpandN (e : Value) (fuel : Nat := 16) : Option Value :=
       | some e' =>
           if e' == e then some e else kernelExpandN e' n
 
+def kernelCollect (e : Value) (fuel : Nat := Value.defaultFuel) : Option Value :=
+  run1 (tcollect ()) e fuel
+
+/-- Iterate `tcollect` until a fixpoint or `fuel` passes.
+    Compiles `tcollect` once; the Unit thunk is otherwise rebuilt each pass. -/
+def kernelCollectN (e : Value) (fuel : Nat := 4) : Option Value :=
+  let prog := tcollect ()
+  let rec go (e : Value) : Nat → Option Value
+    | 0 => some e
+    | n + 1 =>
+        match run1 prog e with
+        | none => none
+        | some e' =>
+            if e' == e then some e else go e' n
+  go e fuel
+
+def kernelCollectExpr (e : Expr) : Option Expr :=
+  match kernelCollect (Expr.encode e) with
+  | some v => Expr.decode v
+  | none   => none
+
 def kernelExpandExpr (e : Expr) : Option Expr :=
   match kernelExpandN (Expr.encode e) with
   | some v =>
@@ -425,6 +447,7 @@ def evalProgram : Unit → Tree := fun _ => teval ()
 def diffProgram : Tree := tdiff
 def simpProgram (_ : Unit := ()) : Tree := tsimp ()
 def expandProgram (_ : Unit := ()) : Tree := texpand ()
+def collectProgram (_ : Unit := ()) : Tree := tcollect ()
 
 def describeKernel : String :=
   "tree-calculus kernel\n\
@@ -438,6 +461,7 @@ def describeKernel : String :=
    diff     Y2 + nested triage; tdiff e name, name compared intensionally\n\
    simp     Y2 + nested triage; one bottom-up rewrite pass\n\
    expand   Y2 + nested triage; distribute * over + and neg over +\n\
+   collect  Y2 + nested triage; merge like terms in a sum\n\
    equal    Y2 + nested triage on both arguments (intensional)\n\
    size     Y2 + triage {1, λx. succ (size x), λx y. succ (size x + size y)}\n\
    binary   0 = △, 2k = △ △ k, 2k+1 = △ (△ △) k  (LSB first)\n\

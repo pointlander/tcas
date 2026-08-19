@@ -12,6 +12,7 @@ import Cas.Parse
 import Cas.Program
 import Cas.Simp
 import Cas.Expand
+import Cas.Collect
 import Cas.Kernel
 import Cas.Semantics
 import Cas.Arith

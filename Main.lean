@@ -27,6 +27,8 @@ def usage : String :=
      cas kernel-simp <expr>  rewrite the encoded tree (tsimp)\n\
      cas kernel-expand <expr>\n\
                              distribute * over + on the encoded tree, then tsimp\n\
+     cas kernel-collect <expr>\n\
+                             merge like terms on the encoded tree (tcollect)\n\
      cas equal <t1> <t2>     intensional equality of two tree programs\n\
      cas size <tree>         count nodes of a tree program\n\
      cas bin + <n> <m>       binary-nat addition\n\
@@ -38,7 +40,7 @@ def usage : String :=
      cas rat +|-|*|/ <p/q> <r/s>\n\
                              reduced rational arithmetic\n\
      cas rat inv <p/q>       rational reciprocal\n\
-     cas show plus|times|pow|pred|minus|iplus|rplus|eval|diff|simp|expand\n\
+     cas show plus|times|pow|pred|minus|iplus|rplus|eval|diff|simp|expand|collect\n\
                              print a kernel combinator\n\
    \n\
      expressions:  2*x^3 + sin(x) - 1/x\n\
@@ -221,6 +223,7 @@ def kernelNamed : String → Option Tree
   | "diff"  => some diffProgram
   | "simp"  => some (simpProgram ())
   | "expand" => some (expandProgram ())
+  | "collect" => some (collectProgram ())
   | "I"     => some I
   | "K"     => some K
   | "S"     => some S
@@ -544,6 +547,13 @@ def main (args : List String) : IO UInt32 := do
           match kernelExpandExpr e with
           | some d => printResult d
           | none   => fail "kernel-expand could not expand the encoded tree"
+  | "kernel-collect" :: rest =>
+      match needExpr rest with
+      | .error m => fail m
+      | .ok (e, _) =>
+          match kernelCollectExpr e with
+          | some d => printResult d
+          | none   => fail "kernel-collect could not collect the encoded tree"
   | "show" :: kind :: _ =>
       match kernelNamed kind with
       | some t =>
